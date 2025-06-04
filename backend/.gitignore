@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+media/ # если не хотите загружать медиа-файлы в гит
+db.sqlite3 # если используете sqlite3
+*.log
+
+# Django specific
+local_settings.py
+/static
+/media
