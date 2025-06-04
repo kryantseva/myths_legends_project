@@ -1,6 +1,0 @@
-.env
-/node_modules
-/venv
-*.log
-export_code.js
-code_export.txt

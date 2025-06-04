@@ -1,0 +1,563 @@
+frontend\myths_legends_app\docker-compose.yml
+
+version: "3.8"
+services:
+  app:
+    build:
+      context: .
+    volumes:
+      - .:/myths_legends_app
+      - /myths_legends_app/node_modules
+    ports:
+      - 3000:3000
+    image: app:react
+    container_name: react_container
+    command: npm start
+    stdin_open: true
+    tty: true
+    environment:
+      REACT_APP_API_BASE_URL: http://localhost:8000
+
+frontend\myths_legends_app\public\index.html
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#000000" />
+<meta
+name="description"
+content="Web site created using create-react-app"
+/>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+href="https://fonts.googleapis.com/css2?family=Poppins&display=swap"
+rel="stylesheet"
+/>
+<link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+<title>Путеводитель по мифам и легендам</title>
+</head>
+<body>
+<noscript>You need to enable JavaScript to run this app.</noscript>
+<div id="root"></div>
+</body>
+</html>
+
+
+
+frontend\myths_legends_app\src\App.css
+
+html, body {
+  margin: 0px;
+  padding: 0px;
+  font-family: Poppins, sans-serif;
+}
+
+/* Это правило теперь не нужно, так как высота карты управляется через Flexbox в Layout и инлайновыми стилями в HomePage */
+/* .leaflet-container {
+  height: 100vh;
+  width: 100%;
+} */
+
+/* Этот блок CSS больше не нужен, так как div.main удален из HomePage.js */
+/* .main {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  flex-direction: column;
+} */
+
+
+frontend\myths_legends_app\src\App.js
+
+import "./App.css";
+import "leaflet/dist/leaflet.css"; // Стили Leaflet все еще нужны глобально
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+
+// Импорты для AuthProvider и Layout
+import { AuthProvider } from './components/AuthContext';
+import Layout from './components/Layout';
+
+// Импорты и исправление для иконок Leaflet по умолчанию
+import L from 'leaflet';
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+
+// Импорт страниц - только HomePage раскомментирован
+import HomePage from './pages/HomePage.js';
+// import LoginPage from './pages/LoginPage';
+// import RegisterPage from './pages/RegisterPage';
+// import ProfilePage from './pages/ProfilePage';
+// import PlacesListPage from './pages/PlacesListPage';
+// import AddEditPlacePage from './pages/AddEditPlacePage';
+// import AddEditNotePage from './pages/AddEditNotePage';
+// import ModerationPage from './pages/ModerationPage'; 
+
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl,
+    iconUrl,
+    shadowUrl,
+});
+
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            {/* Остальные маршруты закомментированы, пока не будут готовы */}
+            {/* <Route path="/login" element={<LoginPage />} /> */}
+            {/* <Route path="/register" element={<RegisterPage />} /> */}
+            {/* <Route path="/profile" element={<ProfilePage />} /> */}
+            {/* <Route path="/places" element={<PlacesListPage />} /> */}
+            {/* <Route path="/places/add" element={<AddEditPlacePage />} /> */}
+            {/* <Route path="/places/:id/edit" element={<AddEditPlacePage />} /> */}
+            {/* <Route path="/places/:placeId/add-note" element={<AddEditNotePage />} /> */}
+            {/* <Route path="/notes/:noteId/edit" element={<AddEditNotePage />} /> */}
+            {/* <Route path="/moderation" element={<ModerationPage />} /> */}
+          </Routes>
+        </Layout>
+      </AuthProvider>
+    </Router>
+  );
+}
+
+export default App;
+
+
+frontend\myths_legends_app\src\components\AuthContext.js
+
+import React, { createContext, useState, useEffect, useContext } from 'react';
+import axios from 'axios';
+
+const AuthContext = createContext(null);
+
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+
+export const AuthProvider = ({ children }) => {
+  const [authToken, setAuthToken] = useState(localStorage.getItem('authToken'));
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  axios.defaults.baseURL = API_BASE_URL;
+
+  useEffect(() => {
+    if (authToken) {
+      axios.defaults.headers.common['Authorization'] = `Token ${authToken}`;
+      fetchUserProfile();
+    } else {
+      delete axios.defaults.headers.common['Authorization'];
+      setCurrentUser(null);
+      setLoading(false);
+    }
+  }, [authToken]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await axios.get('/api/auth/profile/');
+      setCurrentUser(response.data);
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+      setAuthToken(null);
+      localStorage.removeItem('authToken');
+      setCurrentUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (username, password) => {
+    try {
+      const response = await axios.post('/api/auth/login/', { username, password });
+      const token = response.data.token;
+      setAuthToken(token);
+      localStorage.setItem('authToken', token);
+      return true;
+    } catch (error) {
+      console.error('Login failed:', error);
+      alert('Login failed: ' + (error.response?.data?.detail || error.message));
+      return false;
+    }
+  };
+
+  const register = async (username, email, password) => {
+    try {
+      await axios.post('/api/auth/register/', { username, email, password });
+      alert('Registration successful! Please log in.');
+      return true;
+    } catch (error) {
+      console.error('Registration failed:', error);
+      alert('Registration failed: ' + (error.response?.data?.username || error.response?.data?.email || error.message));
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await axios.post('/api/auth/logout/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    } finally {
+      setAuthToken(null);
+      localStorage.removeItem('authToken');
+      setCurrentUser(null);
+    }
+  };
+
+  const value = {
+    authToken,
+    currentUser,
+    isLoggedIn: !!authToken,
+    loading,
+    login,
+    register,
+    logout,
+    fetchUserProfile
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  return useContext(AuthContext);
+};
+
+
+frontend\myths_legends_app\src\components\Layout.js
+
+import React from 'react';
+import { Link, Outlet } from 'react-router-dom';
+import { useAuth } from './AuthContext';
+
+function Layout() {
+  const { isLoggedIn, currentUser, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  const isModeratorOrAdmin = currentUser && (currentUser.is_superuser || currentUser.groups.some(group => group.name === 'Moderators'));
+
+  return (
+    // Корневой div становится Flex-контейнером, занимающим всю высоту viewport
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <header style={{ flexShrink: 0, padding: '10px 20px', borderBottom: '1px solid #ccc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ margin: 0, fontSize: '24px' }}>
+          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>Путеводитель по мифам</Link>
+        </h1>
+        <nav>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', gap: '15px' }}>
+            <li>
+              <Link to="/" style={{ textDecoration: 'none', color: 'blue' }}>Карта</Link>
+            </li>
+            <li>
+              <Link to="/places" style={{ textDecoration: 'none', color: 'blue' }}>Список Мест</Link>
+            </li>
+            {isModeratorOrAdmin && (
+              <li>
+                <Link to="/moderation" style={{ textDecoration: 'none', color: 'orange' }}>Модерация</Link>
+              </li>
+            )}
+            <li>
+              {isLoggedIn ? (
+                <>
+                  <Link to="/profile" style={{ textDecoration: 'none', color: 'blue' }}>Профиль ({currentUser.username})</Link>
+                  <button onClick={handleLogout} style={{ marginLeft: '10px', background: 'none', border: '1px solid red', color: 'red', cursor: 'pointer', padding: '5px 10px', borderRadius: '5px' }}>Выйти</button>
+                </>
+              ) : (
+                <Link to="/login" style={{ textDecoration: 'none', color: 'blue' }}>Войти</Link>
+              )}
+            </li>
+          </ul>
+        </nav>
+      </header>
+      {/* Элемент main занимает все оставшееся пространство по высоте */}
+      {/* Убираем padding отсюда, чтобы карта могла занимать 100% доступной высоты */}
+      <main style={{ flexGrow: 1, padding: '0px', overflowY: 'auto' }}>
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+
+export default Layout;
+
+
+frontend\myths_legends_app\src\index.css
+
+body {
+
+margin: 0;
+
+font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+
+'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+
+sans-serif;
+
+-webkit-font-smoothing: antialiased;
+
+-moz-osx-font-smoothing: grayscale;
+
+}
+
+
+
+code {
+
+font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+
+monospace;
+
+}
+
+frontend\myths_legends_app\src\index.js
+
+import React from 'react';
+
+import ReactDOM from 'react-dom/client';
+
+import './index.css';
+
+import App from './App';
+
+
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+
+root.render(
+
+<React.StrictMode>
+
+<App />
+
+</React.StrictMode>
+
+);
+
+frontend\myths_legends_app\src\pages\HomePage.js
+
+import React, { useEffect, useState, useCallback } from "react";
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
+import { Icon } from "leaflet";
+import axios from 'axios';
+import L from 'leaflet';
+
+// Переопределение иконок Leaflet по умолчанию (оставляем здесь, если App.js не содержит)
+// Если App.js уже содержит этот блок, его можно удалить отсюда.
+// В текущей структуре, где App.js упрощен, этот блок должен быть в HomePage.js.
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: L.Icon.Default.prototype.options.iconRetinaUrl, // Используем пути по умолчанию или импортированные
+    iconUrl: L.Icon.Default.prototype.options.iconUrl,
+    shadowUrl: L.Icon.Default.prototype.options.shadowUrl,
+});
+
+// Кастомные иконки маркеров
+const customMarkerIcon = new Icon({
+  iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const userLocationIcon = new Icon({
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+// Вспомогательная функция для парсинга строки WKT
+const parseWktPoint = (wktString) => {
+  if (!wktString || typeof wktString !== 'string') {
+    return null;
+  }
+  const match = wktString.match(/POINT \(([^ ]+) ([^ ]+)\)/);
+  if (match && match.length === 3) {
+    const longitude = parseFloat(match[1]);
+    const latitude = parseFloat(match[2]);
+    if (!isNaN(longitude) && !isNaN(latitude)) {
+      return { longitude, latitude };
+    }
+  }
+  return null;
+};
+
+// Компонент для отображения маркера геолокации пользователя
+function LocationMarker({ position }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (position) {
+      map.flyTo(position, map.getZoom());
+    }
+  }, [position, map]);
+
+  return position === null ? null : (
+    <Marker position={position} icon={userLocationIcon}>
+      <Popup>Вы находитесь здесь (фиксированные координаты)!</Popup>
+    </Marker>
+  );
+}
+
+// Вспомогательный компонент для размещения кнопки "Моя геолокация"
+function MapEventsHandler({ onLocateMe }) {
+  const map = useMapEvents({});
+
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: '20px',
+      right: '20px',
+      zIndex: 1000
+    }}>
+      <button
+        onClick={() => onLocateMe(map)}
+        style={{
+          width: '50px',
+          height: '50px',
+          borderRadius: '50%',
+          backgroundColor: '#007bff',
+          color: 'white',
+          fontSize: '24px',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+        }}
+        title="Моя геолокация"
+      >
+        📍
+      </button>
+    </div>
+  );
+}
+
+// Основной компонент HomePage
+function HomePage() {
+  const [places, setPlaces] = useState([]);
+  const [userLocation, setUserLocation] = useState(null);
+
+  const kazanCoordinates = [55.7961, 49.1064];
+  const initialZoom = 15;
+  const radiusKm = 15; // Увеличен радиус для теста
+
+  const fixedTestLatitude = 55.7961;
+  const fixedTestLongitude = 49.1064;
+
+  const fetchPlaces = useCallback(async (latitude = null, longitude = null) => {
+    let url = `${process.env.REACT_APP_API_BASE_URL}/api/places/`;
+    if (latitude !== null && longitude !== null) {
+      url = `${process.env.REACT_APP_API_BASE_URL}/api/places/nearest/?lat=${latitude}&lon=${longitude}&radius_km=${radiusKm}`;
+    }
+
+    try {
+      const response = await axios.get(url);
+      if (response.status !== 200) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = response.data;
+
+      if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+          setPlaces(data.features);
+      } else {
+          console.error("API response is not a valid GeoJSON FeatureCollection:", data);
+          setPlaces([]);
+      }
+    } catch (error) {
+      console.error("Error fetching places:", error);
+      setPlaces([]);
+    }
+  }, [radiusKm]);
+
+  useEffect(() => {
+    fetchPlaces();
+  }, [fetchPlaces]);
+
+  const handleLocateMe = useCallback((mapInstance) => {
+    const fixedLatLng = L.latLng(fixedTestLatitude, fixedTestLongitude);
+    setUserLocation(fixedLatLng);
+    mapInstance.flyTo(fixedLatLng, mapInstance.getZoom());
+    fetchPlaces(fixedTestLatitude, fixedTestLongitude);
+  }, [fetchPlaces, fixedTestLatitude, fixedTestLongitude]);
+
+  return (
+    // УДАЛЯЕМ div с className="main" и style={{ height: 'calc(100vh - 80px)', width: '100%' }}
+    // MapContainer теперь будет занимать 100% высоты родительского элемента (main в Layout)
+    <MapContainer
+      center={kazanCoordinates}
+      zoom={initialZoom}
+      scrollWheelZoom={true}
+      style={{ height: '100%', width: '100%' }} // Устанавливаем высоту 100%
+    >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+
+      <LocationMarker position={userLocation} />
+
+      <MapEventsHandler onLocateMe={handleLocateMe} />
+
+      {places.map(place => {
+        const coords = parseWktPoint(place.geometry);
+
+        if (!coords) {
+          console.warn("Пропускаем место из-за отсутствующих или некорректных координат (WKT):", place);
+          return null;
+        }
+
+        const distanceInfo = place.properties.distance !== null && place.properties.distance !== undefined
+          ? `<br/>Расстояние: ${place.properties.distance.toFixed(2)} км`
+          : '';
+
+        return (
+          <Marker
+            position={[coords.latitude, coords.longitude]}
+            icon={customMarkerIcon}
+            key={place.id || place.properties.id}
+          >
+            <Popup>
+              <b>{place.properties.name}</b><br />
+              {place.properties.description}
+              {distanceInfo}
+              {place.properties.image && (
+                <img
+                  src={place.properties.image}
+                  alt={place.properties.name}
+                  style={{ maxWidth: '100px', maxHeight: '100px', marginTop: '5px' }}
+                />
+              )}
+              <p>Категории: {place.properties.categories}</p>
+              <p>Рейтинг: {place.properties.avg_rating ? place.properties.avg_rating.toFixed(1) : 'Нет'}</p>
+              <p>Заметок: {place.properties.notes_count}</p>
+            </Popup>
+          </Marker>
+        );
+      })}
+    </MapContainer>
+  );
+}
+
+export default HomePage;
+
+
