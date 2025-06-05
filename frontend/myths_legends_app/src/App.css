@@ -4,17 +4,8 @@ html, body {
   font-family: Poppins, sans-serif;
 }
 
-/* Это правило теперь не нужно, так как высота карты управляется через Flexbox в Layout и инлайновыми стилями в HomePage */
-/* .leaflet-container {
-  height: 100vh;
-  width: 100%;
-} */
 
-/* Этот блок CSS больше не нужен, так как div.main удален из HomePage.js */
-/* .main {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  flex-direction: column;
-} */
+
+
+
+
