@@ -14,9 +14,9 @@ const excludePaths = [
 const excludeDirs = [
     path.normalize('backend/venv'), 
     // path.normalize('frontend'),
-    path.normalize('backend/places/migrations'),
+    // path.normalize('backend/places/migrations'),
     path.normalize('.venv'), 
-    path.normalize('backend'), 
+    // path.normalize('backend'), 
 ];
 
 function walkDir(dir, fileList = []) {
@@ -26,9 +26,8 @@ function walkDir(dir, fileList = []) {
         const relativePath = path.normalize(path.relative(rootDir, fullPath));
         const stat = fs.statSync(fullPath);
 
-        // Проверяем, является ли текущий путь исключаемой директорией
         if (stat.isDirectory() && excludeDirs.some(excludeDir => relativePath.startsWith(excludeDir))) {
-            continue; // Пропускаем эту директорию и ее содержимое
+            continue; 
         }
 
         if (stat.isDirectory()) {

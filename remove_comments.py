@@ -10,13 +10,8 @@ def remove_comments_from_file(filepath):
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
 
-        # Удаление однострочных комментариев (//)
-        # Ищет // и все символы до конца строки.
-        # Будьте осторожны, если // встречается внутри строковых литералов!
         content = re.sub(r'//.*', '', content)
 
-        # Удаление многострочных комментариев (/* */)
-        # re.DOTALL (s) позволяет '.' соответствовать символам новой строки.
         content = re.sub(r'(?<!:)//.*', '', content)
 
         with open(filepath, 'w', encoding='utf-8') as f:
@@ -28,11 +23,7 @@ def remove_comments_from_file(filepath):
         print(f"❌ Произошла ошибка при обработке файла {filepath}: {e}")
 
 if __name__ == "__main__":
-    # --- ИЗМЕНЕНИЕ: Задайте список путей к файлам здесь ---
-    # Вам нужно будет изменить этот список, чтобы включить файлы, которые вы хотите обработать.
-    # Используйте полные пути к файлам.
     file_paths_to_process = [
-        r"D:\myths_legends_project\frontend\myths_legends_app\src\pages\HomePage.js",
         r"D:\myths_legends_project\frontend\myths_legends_app\src\App.css",
         r"D:\myths_legends_project\frontend\myths_legends_app\src\App.js",
         r"D:\myths_legends_project\frontend\myths_legends_app\src\index.css",
@@ -60,7 +51,7 @@ if __name__ == "__main__":
     else:
         print("\nНачинаем обработку файлов...")
         for path in file_paths_to_process:
-            if os.path.isfile(path): # Добавлена проверка на существование файла
+            if os.path.isfile(path):
                 remove_comments_from_file(path)
             else:
                 print(f"⚠️ Пропускаем: Файл не существует или является директорией: {path}")
