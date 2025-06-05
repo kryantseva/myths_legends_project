@@ -7,14 +7,6 @@ import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 
-// Переопределение иконок Leaflet по умолчанию, чтобы они корректно отображались
-// Этот блок кода должен быть выполнен один раз при загрузке приложения.
-// Поскольку App.js импортирует HomePage, и App.js уже содержит этот блок,
-// здесь его можно было бы опустить, но для самодостаточности HomePage
-// и для случая, если HomePage будет использоваться без App.js,
-// его можно оставить. Однако, если App.js уже содержит его, это может быть избыточно.
-// Для избежания дублирования, если App.js уже содержит этот блок, его можно удалить отсюда.
-// В данном случае, так как App.js был упрощен, этот блок теперь находится здесь.
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: iconRetinaUrl,
@@ -71,7 +63,7 @@ function LocationMarker({ position }) {
 
   return position === null ? null : (
     <Marker position={position} icon={userLocationIcon}>
-      <Popup>Вы находитесь здесь (фиксированные координаты)!</Popup>
+      <Popup>Вы находитесь здесь!</Popup> {/* Изменено сообщение */}
     </Marker>
   );
 }
@@ -114,20 +106,21 @@ function MapEventsHandler({ onLocateMe }) {
 
 // Основной компонент HomePage
 function HomePage() {
+  console.log("HomePage is rendering!"); // Для отладки
+
   const [places, setPlaces] = useState([]); // Состояние для хранения списка мест
   const [userLocation, setUserLocation] = useState(null); // Состояние для хранения координат пользователя
 
-  const kazanCoordinates = [55.7961, 49.1064]; // Примерные координаты центра Казани
+  const kazanCoordinates = [55.7961, 49.1064]; // Примерные координаты центра Казани (используются по умолчанию)
   const initialZoom = 15;
-  const radiusKm = 15; // Радиус поиска ближайших мест в км
+  const radiusKm = 1; // Радиус поиска ближайших мест в км
 
-  // ФИКСИРОВАННЫЕ КООРДИНАТЫ ДЛЯ ТЕСТИРОВАНИЯ
-  const fixedTestLatitude = 55.7961;
-  const fixedTestLongitude = 49.1064;
+  // ФИКСИРОВАННЫЕ КООРДИНАТЫ ДЛЯ ТЕСТИРОВАНИЯ - УДАЛЕНЫ
+  // const fixedTestLatitude = 55.7961;
+  // const fixedTestLongitude = 49.1064;
 
 
   // Функция для получения мест из API
-  // Теперь принимает необязательные параметры latitude и longitude для запроса "nearest"
   const fetchPlaces = useCallback(async (latitude = null, longitude = null) => {
     let url = `${process.env.REACT_APP_API_BASE_URL}/api/places/`;
     if (latitude !== null && longitude !== null) {
@@ -161,21 +154,39 @@ function HomePage() {
 
   // Обработчик для кнопки "Моя геолокация"
   const handleLocateMe = useCallback((mapInstance) => {
-    // Вместо вызова map.locate() используем фиксированные координаты
-    const fixedLatLng = L.latLng(fixedTestLatitude, fixedTestLongitude);
-    setUserLocation(fixedLatLng); // Устанавливаем позицию для маркера геолокации
-    mapInstance.flyTo(fixedLatLng, mapInstance.getZoom()); // Центрируем карту
-    fetchPlaces(fixedTestLatitude, fixedTestLongitude); // Запрашиваем ближайшие места по фиксированным координатам
-  }, [fetchPlaces, fixedTestLatitude, fixedTestLongitude]);
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const currentLatLng = L.latLng(latitude, longitude);
+          setUserLocation(currentLatLng); // Устанавливаем реальную позицию для маркера геолокации
+          mapInstance.flyTo(currentLatLng, mapInstance.getZoom()); // Центрируем карту на реальных координатах
+          fetchPlaces(latitude, longitude); // Запрашиваем ближайшие места по реальным координатам
+        },
+        (error) => {
+          console.error("Error getting user location:", error);
+          alert("Не удалось определить вашу геолокацию. Возможно, вы запретили доступ или функция недоступна.");
+          // Если геолокация не удалась, загружаем все места (по умолчанию)
+          fetchPlaces();
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 } // Опции для геолокации
+      );
+    } else {
+      alert("Ваш браузер не поддерживает геолокацию.");
+      fetchPlaces(); // Загружаем все места
+    }
+  }, [fetchPlaces]);
 
 
   return (
+    // Оставляем div с className="main" и стилем calc(100vh - 80px) по вашему запросу.
+    // Однако, напоминаю, что это может быть причиной того, что карта не отображается.
     <div className="main">
       <MapContainer
         center={kazanCoordinates}
         zoom={initialZoom}
         scrollWheelZoom={true}
-        style={{ height: 'calc(100vh - 80px)', width: '100%' }} // Устанавливаем высоту для карты
+        style={{ height: 'calc(100vh - 80px)', width: '100%', backgroundColor: 'lightcoral' }} // Временный фон оставлен для отладки
       >
         {/* Слой с картой OpenStreetMap */}
         <TileLayer
@@ -200,7 +211,7 @@ function HomePage() {
 
           // Если у места есть 'distance', отображаем его в Popup
           const distanceInfo = place.properties.distance !== null && place.properties.distance !== undefined
-            ? `<br/>Расстояние: ${place.properties.distance.toFixed(2)} км`
+            ? `<br/>Расстояние: ${place.properties.distance.toFixed()} метров`
             : '';
 
           return (
