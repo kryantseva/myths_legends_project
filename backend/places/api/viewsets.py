@@ -33,18 +33,16 @@ class PlaceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-
         queryset = queryset.annotate(
             notes_count=Count('user_notes', filter=Q(user_notes__moderation_status='approved')),
             avg_rating=Coalesce(Avg('user_notes__rating', filter=Q(user_notes__moderation_status='approved', user_notes__rating__isnull=False)), 0.0)
         )
-
         if not (self.request.user.is_superuser or self.request.user.groups.filter(name='Moderators').exists()):
             queryset = queryset.filter(status='approved')
-
         return queryset
 
     def perform_create(self, serializer):
+        # Ensure owner is set to the authenticated user
         serializer.save(owner=self.request.user, status='pending')
 
     @action(detail=False, methods=['get'])

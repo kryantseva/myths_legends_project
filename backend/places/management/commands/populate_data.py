@@ -17,20 +17,10 @@ class Command(BaseCommand):
     def _create_dummy_image(self, width=100, height=100, color=(255, 0, 0), text="Placeholder"):
         """Creates a dummy image file in memory."""
         image = Image.new('RGB', (width, height), color)
-        # Optionally add text to the image
-        # from PIL import ImageDraw, ImageFont
-        # draw = ImageDraw.Draw(image)
-        # try:
-        #     font = ImageFont.truetype("arial.ttf", 15)
-        # except IOError:
-        #     font = ImageFont.load_default()
-        # draw.text((10, 10), text, font=font, fill=(0, 0, 0))
-
         image_io = BytesIO()
         image.save(image_io, format='PNG')
         image_name = f'dummy_{width}x{height}_{random.randint(1000,9999)}.png'
         return File(image_io, name=image_name)
-
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.WARNING('Cleaning up existing data...'))
@@ -39,7 +29,6 @@ class Command(BaseCommand):
         Place.objects.all().delete()
         User.objects.filter(is_superuser=False).delete()
         
-        # Очищаем папку media перед запуском, чтобы не было старых файлов
         media_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../media')
         if os.path.exists(media_root):
             for root, dirs, files in os.walk(media_root):
@@ -66,16 +55,15 @@ class Command(BaseCommand):
                 regular_users.append(user)
                 self.stdout.write(self.style.SUCCESS(f'Created user: {user.username}'))
             else:
-                self.stdout.write(self.style.WARNING(f'User {user.username} already exists.'))
                 regular_users.append(user)
 
-        superuser = User.objects.get(username='admin')
+        superuser, _ = User.objects.get_or_create(username='admin', defaults={'email': 'admin@example.com', 'is_superuser': True, 'is_staff': True})
+        superuser.set_password('admin123')
+        superuser.save()
         Token.objects.get_or_create(user=superuser)
         self.stdout.write(self.style.SUCCESS(f'Ensured token for superuser: {superuser.username}'))
 
-
         self.stdout.write(self.style.MIGRATE_HEADING('Creating diverse places in Kazan...'))
-
         places_data = [
             {'name': 'Казанский Кремль', 'description': 'Историческая крепость и объект Всемирного наследия ЮНЕСКО.', 'lat': 55.7996, 'lon': 49.1064, 'categories': 'Историческое, Крепость', 'owner': superuser, 'status': 'approved'},
             {'name': 'Мечеть Кул-Шариф', 'description': 'Главная соборная мечеть Татарстана, символ Казани.', 'lat': 55.8000, 'lon': 49.1083, 'categories': 'Культовое, Мечеть', 'owner': superuser, 'status': 'approved'},
@@ -84,43 +72,34 @@ class Command(BaseCommand):
             {'name': 'Старо-Татарская слобода', 'description': 'Исторический район Казани, где сохранились традиции и архитектура татарского народа.', 'lat': 55.7760, 'lon': 49.1200, 'categories': 'Историческое, Район', 'owner': superuser, 'status': 'approved'},
             {'name': 'Кремлёвская набережная', 'description': 'Современная набережная реки Казанки, популярное место для прогулок.', 'lat': 55.8075, 'lon': 49.1150, 'categories': 'Отдых, Набережная', 'owner': superuser, 'status': 'approved'},
             {'name': 'Центр семьи Казан', 'description': 'ЗАГС в форме казана, современный символ города и смотровая площадка.', 'lat': 55.8118, 'lon': 49.0910, 'categories': 'Современное, Достопримечательность', 'owner': superuser, 'status': 'approved'},
-            
-            {'name': 'Легенда о Зиланте', 'description': 'Символ Казани, мифическое существо из татарского фольклора.', 'lat': 55.8050, 'lon': 49.1000, 'categories': 'Миф, Символ', 'owner': regular_users[0], 'status': 'approved'},
+            {'name': 'Легенда о Зиланте', 'description': 'Символ Казани, мифическое существо из татарского фольклора.', 'lat': 55.8050, 'lon': 49.1000, 'categories': 'Миф, Символ', 'owner': regular_users[0], 'status': 'pending'},
             {'name': 'Дом Шамиля', 'description': 'Особняк купца Шамиля, связанный с городскими легендами.', 'lat': 55.7820, 'lon': 49.1250, 'categories': 'Легенда, Архитектура', 'owner': regular_users[0], 'status': 'pending'},
             {'name': 'Чертово городище', 'description': 'Место древнего булгарского поселения, окутанное мифами.', 'lat': 55.7600, 'lon': 49.1100, 'categories': 'Историческое, Миф', 'owner': regular_users[0], 'status': 'rejected'},
-
             {'name': 'Легенда о Казанской иконе Божией Матери', 'description': 'Одна из самых почитаемых икон России, с ней связано множество чудес.', 'lat': 55.7800, 'lon': 49.1200, 'categories': 'Легенда, Культовое', 'owner': regular_users[1], 'status': 'approved'},
             {'name': 'Булак', 'description': 'Канал в центре Казани, с ним связаны свои городские истории.', 'lat': 55.7890, 'lon': 49.1180, 'categories': 'Отдых, История', 'owner': regular_users[1], 'status': 'pending'},
-
             {'name': 'Озеро Кабан', 'description': 'Система озер, на дне которых, по легенде, хранится ханская казна.', 'lat': 55.7500, 'lon': 49.1500, 'categories': 'Легенда, Природа', 'owner': regular_users[2], 'status': 'approved'},
             {'name': 'Театр им. Г. Камала', 'description': 'Татарский государственный академический театр.', 'lat': 55.7818, 'lon': 49.1230, 'categories': 'Культурное, Театр', 'owner': regular_users[2], 'status': 'approved'},
         ]
 
         created_places = []
         for data in places_data:
-            place_image = self._create_dummy_image(
-                width=random.randint(400, 800), 
-                height=random.randint(300, 600), 
-                color=(random.randint(0,255), random.randint(0,255), random.randint(0,255)),
-                text=data['name']
-            ) if random.random() < 0.7 else None # 70% шанс на изображение
-            
+            place_image = self._create_dummy_image(width=random.randint(400, 800), height=random.randint(300, 600)) if random.random() < 0.7 else None
             place, created = Place.objects.get_or_create(
                 name=data['name'],
                 defaults={
                     'description': data['description'],
                     'location': Point(data['lon'], data['lat']),
                     'categories': data['categories'],
-                    'owner': data['owner'],
+                    'owner': data['owner'],  # Ensure owner is always set
                     'status': data['status'],
-                    'image': place_image # Привязываем изображение
+                    'image': place_image
                 }
             )
             created_places.append(place)
             if created:
-                self.stdout.write(self.style.SUCCESS(f'Created place: {place.name} (Status: {place.status})'))
+                self.stdout.write(self.style.SUCCESS(f'Created place: {place.name} (Status: {place.status}, Owner: {place.owner.username})'))
             else:
-                self.stdout.write(self.style.WARNING(f'Place "{place.name}" already exists. (Status: {place.status})'))
+                self.stdout.write(self.style.WARNING(f'Place "{place.name}" already exists. (Status: {place.status}, Owner: {place.owner.username})'))
 
         self.stdout.write(self.style.MIGRATE_HEADING('Creating diverse notes for places...'))
 
