@@ -2093,7 +2093,7 @@ function HomePage() {
 
   const kazanCoordinates = [55.7961, 49.1064]; 
   const initialZoom = 15;
-  const radiusKm = 1;
+  const radiusKm = 2;
 
   // ФИКСИРОВАННЫЕ КООРДИНАТЫ ДЛЯ ТЕСТИРОВАНИЯ
   // const fixedTestLatitude = 55.7961;
