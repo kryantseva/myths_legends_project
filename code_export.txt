@@ -1343,7 +1343,6 @@ default_app_config = 'places.apps.PlacesConfig'
 backend\users\serializers.py
 
 # backend/users/serializers.py
-
 from rest_framework import serializers
 from django.contrib.auth.models import User
 
@@ -1353,31 +1352,20 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'password')
-        extra_kwargs = {'password': {'write_only': True}} # Ensure password is write-only
+        extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
         user = User.objects.create_user(
             username=validated_data['username'],
-            email=validated_data.get('email', ''), # Email is optional if not strictly required
+            email=validated_data.get('email', ''),
             password=validated_data['password']
         )
         return user
 
 class AuthTokenSerializer(serializers.Serializer):
-    username = serializers.CharField(
-        label="Username",
-        write_only=True
-    )
-    password = serializers.CharField(
-        label="Password",
-        style={'input_type': 'password'},
-        trim_whitespace=False,
-        write_only=True
-    )
-    token = serializers.CharField(
-        label="Token",
-        read_only=True
-    )
+    username = serializers.CharField(label="Username", write_only=True)
+    password = serializers.CharField(label="Password", style={'input_type': 'password'}, trim_whitespace=False, write_only=True)
+    token = serializers.CharField(label="Token", read_only=True)
 
     def validate(self, attrs):
         username = attrs.get('username')
@@ -1385,8 +1373,7 @@ class AuthTokenSerializer(serializers.Serializer):
 
         if username and password:
             from django.contrib.auth import authenticate
-            user = authenticate(request=self.context.get('request'),
-                                username=username, password=password)
+            user = authenticate(request=self.context.get('request'), username=username, password=password)
 
             if not user:
                 msg = 'Unable to log in with provided credentials.'
@@ -1415,7 +1402,6 @@ urlpatterns = [
 backend\users\views.py
 
 # backend/users/views.py
-
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
@@ -1423,7 +1409,6 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
-
 from .serializers import UserSerializer, AuthTokenSerializer
 
 class RegisterView(generics.CreateAPIView):
@@ -1433,29 +1418,23 @@ class RegisterView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save()
-        # Автоматически создать токен для нового пользователя после регистрации
-        token, created = Token.objects.get_or_create(user=user) # Получаем токен здесь
+        token, created = Token.objects.get_or_create(user=user)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
-        
-        # Получаем пользователя, который был создан в perform_create
         user = User.objects.get(username=serializer.data['username'])
-        token = Token.objects.get(user=user).key # И его токен
-
-        # Формируем ответ с токеном
+        token = Token.objects.get(user=user).key
         return Response({
             'user_id': user.pk,
             'username': user.username,
             'email': user.email,
-            'token': token # <--- ДОБАВЛЕНО/ИЗМЕНЕНО
+            'token': token
         }, status=status.HTTP_201_CREATED, headers=headers)
 
 class LoginView(ObtainAuthToken):
-    # Используем кастомный сериализатор для корректного сообщения об ошибке
     serializer_class = AuthTokenSerializer
 
     def post(self, request, *args, **kwargs):
@@ -1463,30 +1442,34 @@ class LoginView(ObtainAuthToken):
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
         token, created = Token.objects.get_or_create(user=user)
+        print(f"Login successful for {user.username}, token: {token.key}")  # Для отладки
         return Response({
             'token': token.key,
             'user_id': user.pk,
             'email': user.email,
             'username': user.username
         })
-
 class LogoutView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def post(self, request):
         try:
             request.user.auth_token.delete()
-        except Token.DoesNotExist: # <--- ДОБАВЛЕНО: обрабатываем случай, если токена нет
-            pass # Токен уже был удален или его не было
-
+        except Token.DoesNotExist:
+            pass
         return Response(status=status.HTTP_200_OK)
 
 class UserProfileView(generics.RetrieveAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = UserSerializer
 
-    def get_object(self):
-        return self.request.user
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        serializer = self.get_serializer(user)
+        data = serializer.data
+        data['is_superuser'] = user.is_superuser
+        data['groups'] = [group.name for group in user.groups.all()]
+        return Response(data)
 
 frontend\myths_legends_app\docker-compose.yml
 
@@ -1554,59 +1537,56 @@ html, body {
 
 frontend\myths_legends_app\src\App.js
 
+// frontend/myths_legends_app/src/App.js
 import "./App.css";
-import "leaflet/dist/leaflet.css"; 
+import "leaflet/dist/leaflet.css";
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
-
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from './components/AuthContext';
-
-
-
 import L from 'leaflet';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
-
-
-
 import HomePage from './pages/HomePage';
-
-
-
-
-
-
-
-
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-    iconRetinaUrl,
-    iconUrl,
-    shadowUrl,
+  iconRetinaUrl,
+  iconUrl,
+  shadowUrl,
 });
 
 function App() {
   return (
     <Router>
       <AuthProvider>
-        {}
+        <div>
+          <nav style={{ padding: '10px', background: '#f8f9fa', borderBottom: '1px solid #ccc' }}>
+            <ul style={{ listStyle: 'none', display: 'flex', gap: '15px', margin: 0, padding: 0 }}>
+              <li>
+                <Link to="/" style={{ textDecoration: 'none', color: 'blue' }}>Карта</Link>
+              </li>
+              <li>
+                <Link to="/profile" style={{ textDecoration: 'none', color: 'blue' }}>Профиль</Link>
+              </li>
+              <li>
+                <Link to="/login" style={{ textDecoration: 'none', color: 'blue' }}>Войти</Link>
+              </li>
+              <li>
+                <Link to="/register" style={{ textDecoration: 'none', color: 'blue' }}>Регистрация</Link>
+              </li>
+            </ul>
+          </nav>
           <Routes>
             <Route path="/" element={<HomePage />} />
-            {}
-            {}
-            {}
-            {}
-            {}
-            {}
-            {}
-            {}
-            {}
-            {}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Routes>
-        {}
+        </div>
       </AuthProvider>
     </Router>
   );
@@ -1616,6 +1596,7 @@ export default App;
 
 frontend\myths_legends_app\src\components\AuthContext.js
 
+// frontend/myths_legends_app/src/components/AuthContext.js
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 
@@ -1644,7 +1625,15 @@ export const AuthProvider = ({ children }) => {
   const fetchUserProfile = async () => {
     try {
       const response = await axios.get('/api/auth/profile/');
-      setCurrentUser(response.data);
+      const { id, username, email, is_superuser, groups } = response.data;
+      setCurrentUser({
+        id,
+        username,
+        email,
+        is_superuser,
+        groups: groups || [],
+      });
+      console.log('User profile loaded:', { id, username, email, is_superuser, groups });
     } catch (error) {
       console.error('Failed to fetch user profile:', error);
       setAuthToken(null);
@@ -1657,13 +1646,18 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
+      console.log('Attempting login with:', { username, password });
       const response = await axios.post('/api/auth/login/', { username, password });
-      const token = response.data.token;
+      console.log('Login response:', response.data);
+      const { token, user_id, email, username: userName } = response.data;
       setAuthToken(token);
       localStorage.setItem('authToken', token);
+      setCurrentUser({ id: user_id, username: userName, email, is_superuser: false, groups: [] });
+      await fetchUserProfile();
+      console.log('Login successful, currentUser:', currentUser);
       return true;
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Login failed:', error.response?.data || error.message);
       alert('Login failed: ' + (error.response?.data?.detail || error.message));
       return false;
     }
@@ -1671,12 +1665,12 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (username, email, password) => {
     try {
-      await axios.post('/api/auth/register/', { username, email, password });
+      const response = await axios.post('/api/auth/register/', { username, email, password });
       alert('Registration successful! Please log in.');
       return true;
     } catch (error) {
       console.error('Registration failed:', error);
-      alert('Registration failed: ' + (error.response?.data?.username || error.response?.data?.email || error.message));
+      alert('Registration failed: ' + (error.response?.data?.username?.[0] || error.response?.data?.email?.[0] || error.message));
       return false;
     }
   };
@@ -1697,11 +1691,12 @@ export const AuthProvider = ({ children }) => {
     authToken,
     currentUser,
     isLoggedIn: !!authToken,
+    isModeratorOrAdmin: currentUser && (currentUser.is_superuser || currentUser.groups.includes('Moderators')),
     loading,
     login,
     register,
     logout,
-    fetchUserProfile
+    fetchUserProfile,
   };
 
   return (
@@ -1715,24 +1710,21 @@ export const useAuth = () => {
   return useContext(AuthContext);
 };
 
-
 frontend\myths_legends_app\src\components\Layout.js
 
+// frontend/myths_legends_app/src/components/Layout.js
 import React from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 function Layout() {
-  const { isLoggedIn, currentUser, logout } = useAuth();
+  const { isLoggedIn, currentUser, logout, isModeratorOrAdmin } = useAuth();
 
   const handleLogout = async () => {
     await logout();
   };
 
-  const isModeratorOrAdmin = currentUser && (currentUser.is_superuser || currentUser.groups.some(group => group.name === 'Moderators'));
-
   return (
-    
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <header style={{ flexShrink: 0, padding: '10px 20px', borderBottom: '1px solid #ccc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ margin: 0, fontSize: '24px' }}>
@@ -1743,29 +1735,47 @@ function Layout() {
             <li>
               <Link to="/" style={{ textDecoration: 'none', color: 'blue' }}>Карта</Link>
             </li>
-            <li>
-              <Link to="/places" style={{ textDecoration: 'none', color: 'blue' }}>Список Мест</Link>
-            </li>
-            {isModeratorOrAdmin && (
-              <li>
-                <Link to="/moderation" style={{ textDecoration: 'none', color: 'orange' }}>Модерация</Link>
-              </li>
+            {isLoggedIn ? (
+              <>
+                <li>
+                  <Link to="/profile" style={{ textDecoration: 'none', color: 'blue' }}>
+                    Профиль ({currentUser?.username || 'Пользователь'})
+                  </Link>
+                </li>
+                {isModeratorOrAdmin && (
+                  <li>
+                    <Link to="/moderation" style={{ textDecoration: 'none', color: 'orange' }}>Модерация</Link>
+                  </li>
+                )}
+                <li>
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      background: 'none',
+                      border: '1px solid red',
+                      color: 'red',
+                      cursor: 'pointer',
+                      padding: '5px 10px',
+                      borderRadius: '5px',
+                    }}
+                  >
+                    Выйти
+                  </button>
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <Link to="/login" style={{ textDecoration: 'none', color: 'blue' }}>Войти</Link>
+                </li>
+                <li>
+                  <Link to="/register" style={{ textDecoration: 'none', color: 'blue' }}>Регистрация</Link>
+                </li>
+              </>
             )}
-            <li>
-              {isLoggedIn ? (
-                <>
-                  <Link to="/profile" style={{ textDecoration: 'none', color: 'blue' }}>Профиль ({currentUser.username})</Link>
-                  <button onClick={handleLogout} style={{ marginLeft: '10px', background: 'none', border: '1px solid red', color: 'red', cursor: 'pointer', padding: '5px 10px', borderRadius: '5px' }}>Выйти</button>
-                </>
-              ) : (
-                <Link to="/login" style={{ textDecoration: 'none', color: 'blue' }}>Войти</Link>
-              )}
-            </li>
           </ul>
         </nav>
       </header>
-      {}
-      {}
       <main style={{ flexGrow: 1, padding: '0px', overflowY: 'auto' }}>
         <Outlet />
       </main>
@@ -1774,7 +1784,6 @@ function Layout() {
 }
 
 export default Layout;
-
 
 frontend\myths_legends_app\src\components\PlaceDetailModal.js
 
@@ -2213,66 +2222,434 @@ function HomePage() {
 
 export default HomePage;
 
-remove_comments.py
+frontend\myths_legends_app\src\pages\LoginPage.css
 
-import re
-import os
+.login-container {
+  max-width: 400px;
+  margin: 50px auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  text-align: center;
+}
 
-def remove_comments_from_file(filepath):
-    """
-    Удаляет однострочные (//) и многострочные (/* */) комментарии из указанного файла.
-    Для Python-комментариев (#, трипл-кавычки) потребуются другие регулярные выражения.
-    """
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read()
+.login-container div {
+  margin-bottom: 15px;
+}
 
-        content = re.sub(r'//.*', '', content)
+.login-container label {
+  display: block;
+  margin-bottom: 5px;
+}
 
-        content = re.sub(r'(?<!:)//.*', '', content)
+.login-container input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
 
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(content)
-        print(f"✅ Успешно обработан файл: {filepath}")
-    except FileNotFoundError:
-        print(f"❌ Ошибка: Файл не найден по пути: {filepath}")
-    except Exception as e:
-        print(f"❌ Произошла ошибка при обработке файла {filepath}: {e}")
+.login-container button {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
 
-if __name__ == "__main__":
-    file_paths_to_process = [
-        r"D:\myths_legends_project\frontend\myths_legends_app\src\App.css",
-        r"D:\myths_legends_project\frontend\myths_legends_app\src\App.js",
-        r"D:\myths_legends_project\frontend\myths_legends_app\src\index.css",
-        r"D:\myths_legends_project\frontend\myths_legends_app\src\index.js",
-        r"D:\myths_legends_project\frontend\myths_legends_app\src\components\AuthContext.js",
-        r"D:\myths_legends_project\frontend\myths_legends_app\src\components\Layout.js",
-        r"D:\myths_legends_project\frontend\myths_legends_app\src\components\PlaceDetailModal.js",
-        r"D:\myths_legends_project\backend\places\signals.py",
-        r"D:\myths_legends_project\backend\places\models.py",
-        r"D:\myths_legends_project\backend\places\filters.py",
-        r"D:\myths_legends_project\backend\places\apps.py",
-        r"D:\myths_legends_project\backend\places\admin.py",
-        r"D:\myths_legends_project\backend\places\management\commands\populate_data.py",
-        r"D:\myths_legends_project\backend\places\tests\test_api.py",
-        r"D:\myths_legends_project\backend\places\api\viewsets.py",
-        r"D:\myths_legends_project\backend\places\api\urls.py",
-        r"D:\myths_legends_project\backend\places\api\serializers.py",
-        r"D:\myths_legends_project\backend\places\api\permissions.py",
-        r"D:\myths_legends_project\backend\myths_legends_project\wsgi.py",
-        r"D:\myths_legends_project\backend\myths_legends_project\urls.py",
-    ]
+.login-container button:hover {
+  background-color: #0056b3;
+}
 
-    if not file_paths_to_process:
-        print("Список файлов для обработки пуст. Пожалуйста, укажите файлы в переменной 'file_paths_to_process'.")
-    else:
-        print("\nНачинаем обработку файлов...")
-        for path in file_paths_to_process:
-            if os.path.isfile(path):
-                remove_comments_from_file(path)
-            else:
-                print(f"⚠️ Пропускаем: Файл не существует или является директорией: {path}")
-        print("\n🗑️ Удаление комментариев завершено.")
+.login-container a {
+  color: #007bff;
+  text-decoration: none;
+}
 
+.login-container a:hover {
+  text-decoration: underline;
+}
 
+frontend\myths_legends_app\src\pages\LoginPage.js
+
+// frontend/myths_legends_app/src/pages/LoginPage.js
+import React, { useState } from 'react';
+import { useAuth } from '../components/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import './LoginPage.css';
+
+function LoginPage() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
+  const [error, setError] = useState('');
+
+  const handleChange = (e) => {
+    setCredentials({ ...credentials, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    const success = await login(credentials.username, credentials.password);
+    if (success) {
+      navigate('/');
+    } else {
+      setError('Неверное имя пользователя или пароль.');
+    }
+  };
+
+  return (
+    <div className="login-container">
+      <h2>Вход в систему</h2>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>Имя пользователя:</label>
+          <input
+            type="text"
+            name="username"
+            value={credentials.username}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <div>
+          <label>Пароль:</label>
+          <input
+            type="password"
+            name="password"
+            value={credentials.password}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <button type="submit">Войти</button>
+      </form>
+      <p>
+        Нет аккаунта? <a href="/register">Зарегистрироваться</a>
+      </p>
+    </div>
+  );
+}
+
+export default LoginPage;
+
+frontend\myths_legends_app\src\pages\ProfilePage.css
+
+/* frontend/myths_legends_app/src/pages/ProfilePage.css */
+.profile-container {
+  max-width: 800px;
+  margin: 50px auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.profile-info {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.profile-info p {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.profile-section {
+  margin-bottom: 20px;
+}
+
+.profile-section h3 {
+  margin: 0 0 10px;
+  color: #333;
+  font-size: 20px;
+}
+
+.profile-section ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.profile-section li {
+  padding: 10px 0;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+}
+
+.logout-button {
+  padding: 10px 20px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.logout-button:hover {
+  background-color: #c82333;
+}
+
+frontend\myths_legends_app\src\pages\ProfilePage.js
+
+// frontend/myths_legends_app/src/pages/ProfilePage.js
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '../components/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import './ProfilePage.css';
+
+function ProfilePage() {
+  const { currentUser, isLoggedIn, logout } = useAuth();
+  const navigate = useNavigate();
+  const [userPlaces, setUserPlaces] = useState([]);
+  const [userNotes, setUserNotes] = useState([]);
+  const [favoritePlaces, setFavoritePlaces] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      navigate('/login');
+      return;
+    }
+    if (!currentUser && isLoggedIn) {
+      console.log('Waiting for currentUser to load...');
+      return; // Ждем загрузки currentUser
+    }
+
+    const fetchUserData = async () => {
+      try {
+        const headers = { Authorization: `Token ${localStorage.getItem('authToken')}` };
+
+        // Получаем места пользователя
+        const placesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/?owner=${currentUser.id}`, { headers });
+        const placesData = placesResponse.data.features || placesResponse.data.results || placesResponse.data;
+        setUserPlaces(Array.isArray(placesData) ? placesData : []);
+
+        // Получаем заметки пользователя
+        const notesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?user=${currentUser.id}`, { headers });
+        const notesData = notesResponse.data.results || notesResponse.data;
+        setUserNotes(Array.isArray(notesData) ? notesData : []);
+
+        // Получаем избранные места
+        const favoritesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/`, { headers });
+        const allPlaces = favoritesResponse.data.features || favoritesResponse.data.results || favoritesResponse.data;
+        const userFavorites = allPlaces.filter(place =>
+          place.favorites && place.favorites.includes(currentUser.id)
+        );
+        setFavoritePlaces(userFavorites);
+
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+        setError('Не удалось загрузить данные профиля. Попробуйте снова.');
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [isLoggedIn, currentUser, navigate]);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  if (loading) return <div style={{ textAlign: 'center', padding: '20px' }}>Загрузка...</div>;
+  if (error) return <div style={{ color: 'red', textAlign: 'center', padding: '20px' }}>{error}</div>;
+  if (!isLoggedIn) return <div style={{ textAlign: 'center', padding: '20px' }}>Пожалуйста, войдите в систему.</div>;
+
+  return (
+    <div className="profile-container">
+      <h2>Профиль пользователя</h2>
+      <div className="profile-info">
+        <p><strong>Имя пользователя:</strong> {currentUser.username}</p>
+        <p><strong>Email:</strong> {currentUser.email || 'Не указан'}</p>
+        <p><strong>Роль:</strong> {currentUser.is_superuser ? 'Администратор' : 'Пользователь'}</p>
+      </div>
+
+      <div className="profile-section">
+        <h3>Ваши места ({userPlaces.length})</h3>
+        {userPlaces.length > 0 ? (
+          <ul>
+            {userPlaces.map(place => (
+              <li key={place.id}>
+                {place.properties?.name || place.name} (Статус: {place.properties?.status || place.status})
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>Вы еще не добавили ни одного места.</p>
+        )}
+      </div>
+
+      <div className="profile-section">
+        <h3>Ваши заметки ({userNotes.length})</h3>
+        {userNotes.length > 0 ? (
+          <ul>
+            {userNotes.map(note => (
+              <li key={note.id}>
+                {note.text} (Место: {note.place?.name || 'Неизвестно'}, Статус: {note.moderation_status})
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>Вы еще не оставили ни одной заметки.</p>
+        )}
+      </div>
+
+      <div className="profile-section">
+        <h3>Избранные места ({favoritePlaces.length})</h3>
+        {favoritePlaces.length > 0 ? (
+          <ul>
+            {favoritePlaces.map(place => (
+              <li key={place.id}>
+                {place.properties?.name || place.name}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>У вас нет избранных мест.</p>
+        )}
+      </div>
+
+      <button className="logout-button" onClick={handleLogout}>
+        Выйти
+      </button>
+    </div>
+  );
+}
+
+export default ProfilePage;
+
+frontend\myths_legends_app\src\pages\RegisterPage.css
+
+.register-container {
+  max-width: 400px;
+  margin: 50px auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.register-container div {
+  margin-bottom: 15px;
+}
+
+.register-container label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.register-container input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.register-container button {
+  padding: 10px 20px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.register-container button:hover {
+  background-color: #218838;
+}
+
+.register-container a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.register-container a:hover {
+  text-decoration: underline;
+}
+
+frontend\myths_legends_app\src\pages\RegisterPage.js
+
+// frontend/myths_legends_app/src/pages/RegisterPage.js
+import React, { useState } from 'react';
+import { useAuth } from '../components/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import './RegisterPage.css';
+
+function RegisterPage() {
+  const { register } = useAuth();
+  const navigate = useNavigate();
+  const [userData, setUserData] = useState({ username: '', email: '', password: '' });
+  const [error, setError] = useState('');
+
+  const handleChange = (e) => {
+    setUserData({ ...userData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    const success = await register(userData.username, userData.email, userData.password);
+    if (success) {
+      navigate('/login');
+    } else {
+      setError('Регистрация не удалась. Проверьте данные.');
+    }
+  };
+
+  return (
+    <div className="register-container">
+      <h2>Регистрация</h2>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>Имя пользователя:</label>
+          <input
+            type="text"
+            name="username"
+            value={userData.username}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <div>
+          <label>Email:</label>
+          <input
+            type="email"
+            name="email"
+            value={userData.email}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <div>
+          <label>Пароль:</label>
+          <input
+            type="password"
+            name="password"
+            value={userData.password}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <button type="submit">Зарегистрироваться</button>
+      </form>
+      <p>
+        Уже есть аккаунт? <a href="/login">Войти</a>
+      </p>
+    </div>
+  );
+}
+
+export default RegisterPage;
 

@@ -1,17 +1,18 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import { Icon } from "leaflet";
-import axios from 'axios'; 
-import L from 'leaflet'; 
+import axios from 'axios';
+import L from 'leaflet';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
+import 'leaflet/dist/leaflet.css'; // Ensure Leaflet CSS is imported
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-    iconRetinaUrl: iconRetinaUrl,
-    iconUrl: iconUrl,
-    shadowUrl: shadowUrl,
+  iconRetinaUrl: iconRetinaUrl,
+  iconUrl: iconUrl,
+  shadowUrl: shadowUrl,
 });
 
 const customMarkerIcon = new Icon({
@@ -36,11 +37,10 @@ const parseWktPoint = (wktString) => {
   if (!wktString || typeof wktString !== 'string') {
     return null;
   }
-
   const match = wktString.match(/POINT \(([^ ]+) ([^ ]+)\)/);
   if (match && match.length === 3) {
-    const longitude = parseFloat(match[1]); 
-    const latitude = parseFloat(match[2]);  
+    const longitude = parseFloat(match[1]);
+    const latitude = parseFloat(match[2]);
     if (!isNaN(longitude) && !isNaN(latitude)) {
       return { longitude, latitude };
     }
@@ -49,7 +49,7 @@ const parseWktPoint = (wktString) => {
 };
 
 function LocationMarker({ position }) {
-  const map = useMap(); 
+  const map = useMap();
 
   useEffect(() => {
     if (position) {
@@ -59,19 +59,19 @@ function LocationMarker({ position }) {
 
   return position === null ? null : (
     <Marker position={position} icon={userLocationIcon}>
-      <Popup>Вы находитесь здесь!</Popup> 
+      <Popup>Вы находитесь здесь!</Popup>
     </Marker>
   );
 }
 
 function MapEventsHandler({ onLocateMe }) {
-  const map = useMapEvents({}); 
+  const map = useMapEvents({});
   return (
     <div style={{
       position: 'absolute',
       bottom: '20px',
       right: '20px',
-      zIndex: 1000 
+      zIndex: 1000
     }}>
       <button
         onClick={() => onLocateMe(map)}
@@ -97,21 +97,15 @@ function MapEventsHandler({ onLocateMe }) {
   );
 }
 
-
 function HomePage() {
   console.log("HomePage is rendering!");
 
   const [places, setPlaces] = useState([]);
-  const [userLocation, setUserLocation] = useState(null); 
+  const [userLocation, setUserLocation] = useState(null);
 
-  const kazanCoordinates = [55.7961, 49.1064]; 
+  const kazanCoordinates = [55.7961, 49.1064];
   const initialZoom = 15;
   const radiusKm = 2;
-
-  // ФИКСИРОВАННЫЕ КООРДИНАТЫ ДЛЯ ТЕСТИРОВАНИЯ
-  // const fixedTestLatitude = 55.7961;
-  // const fixedTestLongitude = 49.1064;
-
 
   const fetchPlaces = useCallback(async (latitude = null, longitude = null) => {
     let url = `${process.env.REACT_APP_API_BASE_URL}/api/places/`;
@@ -120,23 +114,22 @@ function HomePage() {
     }
 
     try {
-      const response = await axios.get(url); 
-      if (response.status !== 200) { 
+      const response = await axios.get(url);
+      if (response.status !== 200) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const data = response.data; 
-
+      const data = response.data;
       if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
-          setPlaces(data.features);
+        setPlaces(data.features);
       } else {
-          console.error("API response is not a valid GeoJSON FeatureCollection:", data);
-          setPlaces([]);
+        console.error("API response is not a valid GeoJSON FeatureCollection:", data);
+        setPlaces([]);
       }
     } catch (error) {
       console.error("Error fetching places:", error);
       setPlaces([]);
     }
-  }, [radiusKm]); 
+  }, [radiusKm]);
 
   useEffect(() => {
     fetchPlaces();
@@ -148,8 +141,8 @@ function HomePage() {
         (position) => {
           const { latitude, longitude } = position.coords;
           const currentLatLng = L.latLng(latitude, longitude);
-          setUserLocation(currentLatLng); 
-          mapInstance.flyTo(currentLatLng, mapInstance.getZoom()); 
+          setUserLocation(currentLatLng);
+          mapInstance.flyTo(currentLatLng, mapInstance.getZoom());
           fetchPlaces(latitude, longitude);
         },
         (error) => {
@@ -161,10 +154,9 @@ function HomePage() {
       );
     } else {
       alert("Ваш браузер не поддерживает геолокацию.");
-      fetchPlaces(); 
+      fetchPlaces();
     }
   }, [fetchPlaces]);
-
 
   return (
     <div className="main">
@@ -172,39 +164,33 @@ function HomePage() {
         center={kazanCoordinates}
         zoom={initialZoom}
         scrollWheelZoom={true}
-        style={{ height: 'calc(100vh - 80px)', width: '100%', backgroundColor: 'lightcoral' }} 
+        style={{ height: 'calc(100vh - 80px)', width: '100%' }} // Removed backgroundColor for debugging
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-
         <LocationMarker position={userLocation} />
-
         <MapEventsHandler onLocateMe={handleLocateMe} />
-
         {places.map(place => {
           const coords = parseWktPoint(place.geometry);
-
           if (!coords) {
             console.warn("Пропускаем место из-за отсутствующих или некорректных координат (WKT):", place);
             return null;
           }
-
           const distanceInfo = place.properties.distance !== null && place.properties.distance !== undefined
             ? `<br/>Расстояние: ${place.properties.distance.toFixed()} метров`
             : '';
-
           return (
             <Marker
               position={[coords.latitude, coords.longitude]}
               icon={customMarkerIcon}
-              key={place.id || place.properties.id} 
+              key={place.id || place.properties.id}
             >
               <Popup>
                 <b>{place.properties.name}</b><br />
                 {place.properties.description}
-                {distanceInfo} 
+                {distanceInfo}
                 {place.properties.image && (
                   <img
                     src={place.properties.image}

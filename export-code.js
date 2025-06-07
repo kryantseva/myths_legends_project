@@ -9,6 +9,7 @@ const excludePaths = [
     path.normalize('code-export.txt'),
     // path.normalize('backend/places/management/commands/populate_data.py'),
     path.normalize('backend/places/tests/test_api.py'),
+    path.normalize('remove_comments.py'),
 ];
 
 const excludeDirs = [

@@ -1,3 +1,4 @@
+// frontend/myths_legends_app/src/pages/LoginPage.js
 import React, { useState } from 'react';
 import { useAuth } from '../components/AuthContext';
 import { useNavigate } from 'react-router-dom';

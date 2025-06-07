@@ -1,21 +1,12 @@
+// frontend/myths_legends_app/src/index.js
 import React from 'react';
-
-import ReactDOM from 'react-dom/client';
-
-import './index.css';
-
+import ReactDOM from 'react-dom';
 import App from './App';
+import './index.css'; // If you have global styles
 
-
-
-const root = ReactDOM.createRoot(document.getElementById('root'));
-
-root.render(
-
-<React.StrictMode>
-
-<App />
-
-</React.StrictMode>
-
+ReactDOM.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+  document.getElementById('root')
 );
