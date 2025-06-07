@@ -39,7 +39,6 @@ class Place(models.Model):
         verbose_name="Владелец",
         db_index=True
     )
-    # Добавлено поле для избранных мест
     favorites = models.ManyToManyField(
         User,
         related_name='favorite_places',
@@ -74,6 +73,10 @@ class Place(models.Model):
         self.average_rating = average_rating_data['avg_rating']
         self.rating_count = average_rating_data['count_rating']
         self.save()
+
+    # Ensure status can be updated during moderation
+    def can_moderate(self, user):
+        return user.is_superuser or user.groups.filter(name='Moderators').exists()
 
 
 class UserNote(models.Model):
@@ -110,6 +113,10 @@ class UserNote(models.Model):
     def __str__(self):
         return f"Заметка {self.user.username} о {self.place.name}"
 
+    # Ensure moderation status can be updated
+    def can_moderate(self, user):
+        return user.is_superuser or user.groups.filter(name='Moderators').exists()
+
 
 class Comment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Пользователь", db_index=True)
@@ -132,3 +139,7 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Комментарий от {self.user.username} к заметке {self.note.id}"
+
+    # Ensure moderation status can be updated
+    def can_moderate(self, user):
+        return user.is_superuser or user.groups.filter(name='Moderators').exists()

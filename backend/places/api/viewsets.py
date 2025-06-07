@@ -14,7 +14,6 @@ from .permissions import IsOwnerOrAdminOrReadOnly, IsOwnerOrAdmin, IsModeratorOr
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
-
 class PlaceViewSet(viewsets.ModelViewSet):
     queryset = Place.objects.all().select_related('owner').prefetch_related('user_notes', 'favorites')
     serializer_class = PlaceSerializer
@@ -90,16 +89,18 @@ class PlaceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser | IsModeratorOrAdmin])
     def approve(self, request, pk=None):
         place = self.get_object()
+        if not place.can_moderate(request.user):
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
         place.status = 'approved'
         place.save()
-        return Response({'status': 'place approved'})
+        return Response({'status': 'place approved', 'id': place.id}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser | IsModeratorOrAdmin])
     def reject(self, request, pk=None):
         place = self.get_object()
         place.status = 'rejected'
         place.save()
-        return Response({'status': 'place rejected'})
+        return Response({'status': 'place rejected', 'id': place.id}, status=status.HTTP_200_OK)
 
 
 class UserNoteViewSet(viewsets.ModelViewSet):
@@ -139,14 +140,14 @@ class UserNoteViewSet(viewsets.ModelViewSet):
         note = self.get_object()
         note.moderation_status = 'approved'
         note.save()
-        return Response({'status': 'note approved'})
+        return Response({'status': 'note approved', 'id': note.id}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser | IsModeratorOrAdmin])
     def reject(self, request, pk=None):
         note = self.get_object()
         note.moderation_status = 'rejected'
         note.save()
-        return Response({'status': 'note rejected'})
+        return Response({'status': 'note rejected', 'id': note.id}, status=status.HTTP_200_OK)
 
 
 class CommentViewSet(viewsets.ModelViewSet):
@@ -165,12 +166,9 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        queryset = queryset.annotate(
-            notes_count=Count('user_notes', filter=Q(user_notes__moderation_status='approved')),
-            avg_rating=Coalesce(Avg('user_notes__rating', filter=Q(user_notes__moderation_status='approved', user_notes__rating__isnull=False)), 0.0)
-        )
+        # Remove invalid annotation for user_notes since Comment doesn't relate to user_notes directly
         if not (self.request.user.is_superuser or self.request.user.groups.filter(name='Moderators').exists()):
-            queryset = queryset.filter(status='approved')
+            queryset = queryset.filter(moderation_status='approved')
         return queryset
 
     def perform_create(self, serializer):
@@ -190,11 +188,11 @@ class CommentViewSet(viewsets.ModelViewSet):
         comment = self.get_object()
         comment.moderation_status = 'approved'
         comment.save()
-        return Response({'status': 'comment approved'})
+        return Response({'status': 'comment approved', 'id': comment.id}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser | IsModeratorOrAdmin])
     def reject(self, request, pk=None):
         comment = self.get_object()
         comment.moderation_status = 'rejected'
         comment.save()
-        return Response({'status': 'comment rejected'})
+        return Response({'status': 'comment rejected', 'id': comment.id}, status=status.HTTP_200_OK)

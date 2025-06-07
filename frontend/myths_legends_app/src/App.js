@@ -7,6 +7,7 @@ import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import NavBar from './components/NavBar';
+import ModerationPage from './pages/ModerationPage';
 
 function App() {
   return (
@@ -18,7 +19,7 @@ function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/moderation" element={<div>Moderation Page</div>} />
+          <Route path="/moderation" element={<ModerationPage />} />
           <Route path="/map" element={<HomePage />} />
         </Routes>
       </AuthProvider>

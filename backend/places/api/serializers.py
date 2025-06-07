@@ -1,12 +1,22 @@
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
 from rest_framework import serializers
-from django.contrib.gis.geos import Point
-from django.contrib.gis.measure import D
+from django.contrib.auth.models import User
 from places.models import Place, UserNote, Comment
 from django.db.models import Avg, Count, F, Q
 
+class UserSerializer(serializers.ModelSerializer):
+    groups = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'is_superuser', 'groups']
+
+    def get_groups(self, obj):
+        return [group.name for group in obj.groups.all()]  # Fetch group names
+
 class UserNoteSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='user.username', read_only=True)
+    user = UserSerializer()  # Nested serializer to include groups
 
     class Meta:
         model = UserNote
@@ -15,6 +25,7 @@ class UserNoteSerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='user.username', read_only=True)
+    user = UserSerializer()  # Nested serializer to include groups
 
     class Meta:
         model = Comment
@@ -26,6 +37,7 @@ class PlaceSerializer(GeoFeatureModelSerializer):
     notes_count = serializers.SerializerMethodField()
     avg_rating = serializers.SerializerMethodField()
     current_user_note = serializers.SerializerMethodField()
+    owner = UserSerializer()  # Nested serializer to include groups
     image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
@@ -34,7 +46,7 @@ class PlaceSerializer(GeoFeatureModelSerializer):
         fields = [
             "id", "name", "description", "location", "categories", "status",
             "created_at", "updated_at", "image", "distance",
-            "notes_count", "avg_rating", "current_user_note"
+            "notes_count", "avg_rating", "current_user_note", "owner"
         ]
         read_only_fields = ['created_at', 'updated_at', 'status', 'notes_count', 'avg_rating', 'current_user_note']
 
