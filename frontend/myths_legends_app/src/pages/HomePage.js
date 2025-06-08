@@ -1,13 +1,15 @@
+// frontend/myths_legends_app/src/pages/HomePage.js
 import React, { useEffect, useState, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
 import { Icon } from "leaflet";
 import axios from 'axios';
 import L from 'leaflet';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
-import iconUrl from 'leaflet/dist/images/marker-icon.png'; // <-- Corrected line
+import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
-import 'leaflet/dist/leaflet.css'; // Ensure Leaflet CSS is imported
+import 'leaflet/dist/leaflet.css';
 
+// Исправление для иконок Leaflet по умолчанию
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: iconRetinaUrl,
@@ -33,30 +35,26 @@ const userLocationIcon = new Icon({
   shadowSize: [41, 41]
 });
 
-const parseWktPoint = (wktString) => {
-  if (!wktString || typeof wktString !== 'string') {
-    return null;
+// Функция для парсинга WKT строки в объект координат.
+const parseWktPoint = (wktStringOrObject) => {
+  if (typeof wktStringOrObject === 'object' && wktStringOrObject !== null && wktStringOrObject.type === 'Point' && Array.isArray(wktStringOrObject.coordinates)) {
+    return { longitude: wktStringOrObject.coordinates[0], latitude: wktStringOrObject.coordinates[1] };
   }
-  const match = wktString.match(/POINT \(([^ ]+) ([^ ]+)\)/);
+  if (!wktStringOrObject || typeof wktStringOrObject !== 'string') return null;
+  const match = wktStringOrObject.match(/POINT \(([^ ]+) ([^ ]+)\)/);
   if (match && match.length === 3) {
     const longitude = parseFloat(match[1]);
     const latitude = parseFloat(match[2]);
-    if (!isNaN(longitude) && !isNaN(latitude)) {
-      return { longitude, latitude };
-    }
+    return !isNaN(longitude) && !isNaN(latitude) ? { longitude, latitude } : null;
   }
   return null;
 };
 
 function LocationMarker({ position }) {
   const map = useMap();
-
   useEffect(() => {
-    if (position) {
-      map.flyTo(position, map.getZoom());
-    }
+    if (position) map.flyTo(position, map.getZoom());
   }, [position, map]);
-
   return position === null ? null : (
     <Marker position={position} icon={userLocationIcon}>
       <Popup>Вы находитесь здесь!</Popup>
@@ -67,71 +65,31 @@ function LocationMarker({ position }) {
 function MapClickListener({ isAddingPlaceMode, onMapClickForAdd }) {
   useMapEvents({
     click(e) {
-      if (isAddingPlaceMode) {
-        onMapClickForAdd(e.latlng);
-      }
+      if (isAddingPlaceMode) onMapClickForAdd(e.latlng);
     },
     mousemove(e) {
-      if (isAddingPlaceMode) {
-        e.originalEvent.target.style.cursor = 'crosshair';
-      } else {
-        e.originalEvent.target.style.cursor = '';
-      }
-    }
+      if (isAddingPlaceMode) e.originalEvent.target.style.cursor = 'crosshair';
+      else e.originalEvent.target.style.cursor = '';
+    },
   });
   return null;
 }
 
-function MapButtons({ onLocateMe, onAddPlaceModeToggle, isAddingPlaceMode, isAuthenticated }) { // Добавляем isAuthenticated
+function MapButtons({ onLocateMe, onAddPlaceModeToggle, isAddingPlaceMode, isAuthenticated }) {
   const map = useMapEvents({});
-
   return (
-    <div style={{
-      position: 'absolute',
-      bottom: '20px',
-      right: '20px',
-      zIndex: 1000,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px'
-    }}>
+    <div style={{ position: 'absolute', bottom: '20px', right: '20px', zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <button
         onClick={() => onLocateMe(map)}
-        style={{
-          width: '50px',
-          height: '50px',
-          borderRadius: '50%',
-          backgroundColor: '#007bff',
-          color: 'white',
-          fontSize: '24px',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-        }}
+        style={{ width: '50px', height: '50px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', fontSize: '24px', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}
         title="Моя геолокация"
       >
         📍
       </button>
-      {isAuthenticated && ( // Условный рендеринг кнопки добавления места
+      {isAuthenticated && (
         <button
           onClick={onAddPlaceModeToggle}
-          style={{
-            width: '50px',
-            height: '50px',
-            borderRadius: '50%',
-            backgroundColor: isAddingPlaceMode ? '#ffc107' : '#28a745',
-            color: 'white',
-            fontSize: '24px',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-          }}
+          style={{ width: '50px', height: '50px', borderRadius: '50%', backgroundColor: isAddingPlaceMode ? '#ffc107' : '#28a745', color: 'white', fontSize: '24px', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}
           title={isAddingPlaceMode ? "Отменить добавление" : "Добавить новое место"}
         >
           {isAddingPlaceMode ? '✖' : '+'}
@@ -142,13 +100,9 @@ function MapButtons({ onLocateMe, onAddPlaceModeToggle, isAddingPlaceMode, isAut
 }
 
 function HomePage() {
-  console.log("HomePage is rendering!");
-
   const [places, setPlaces] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // Новое состояние для авторизации
-
-  // Состояния для добавления места
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAddingPlaceMode, setIsAddingPlaceMode] = useState(false);
   const [newPlaceCoordinates, setNewPlaceCoordinates] = useState(null);
   const [newPlaceData, setNewPlaceData] = useState({
@@ -158,15 +112,15 @@ function HomePage() {
     image: null,
   });
   const [formMessage, setFormMessage] = useState('');
+  const [showModerationAlert, setShowModerationAlert] = useState(false);
 
   const kazanCoordinates = [55.7961, 49.1064];
   const initialZoom = 15;
   const radiusKm = 2;
 
-  // Проверка авторизации при загрузке компонента
   useEffect(() => {
-    const token = localStorage.getItem('authToken'); // Или как вы храните токен
-    setIsAuthenticated(!!token); // Устанавливаем true, если токен есть, иначе false
+    const token = localStorage.getItem('authToken');
+    setIsAuthenticated(!!token);
   }, []);
 
   const fetchPlaces = useCallback(async (latitude = null, longitude = null) => {
@@ -174,12 +128,9 @@ function HomePage() {
     if (latitude !== null && longitude !== null) {
       url = `${process.env.REACT_APP_API_BASE_URL}/api/places/nearest/?lat=${latitude}&lon=${longitude}&radius_km=${radiusKm}`;
     }
-
     try {
       const response = await axios.get(url);
-      if (response.status !== 200) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (response.status !== 200) throw new Error(`HTTP error! status: ${response.status}`);
       const data = response.data;
       if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
         setPlaces(data.features);
@@ -221,24 +172,24 @@ function HomePage() {
   }, [fetchPlaces]);
 
   const handleAddPlaceModeToggle = useCallback(() => {
-    if (!isAuthenticated) { // Защита от неавторизованных пользователей
+    if (!isAuthenticated) {
       alert("Для добавления места необходимо авторизоваться.");
       return;
     }
     setIsAddingPlaceMode(prevMode => !prevMode);
     setNewPlaceCoordinates(null);
     setFormMessage('');
-  }, [isAuthenticated]); // Добавляем isAuthenticated в зависимости
+  }, [isAuthenticated]);
 
   const handleMapClickForNewPlace = useCallback((latlng) => {
-    if (!isAuthenticated) { // Защита от неавторизованных пользователей
+    if (!isAuthenticated) {
       alert("Для добавления места необходимо авторизоваться.");
       return;
     }
     setNewPlaceCoordinates(latlng);
     setIsAddingPlaceMode(false);
     setFormMessage('Координаты выбраны. Заполните информацию о месте.');
-  }, [isAuthenticated]); // Добавляем isAuthenticated в зависимости
+  }, [isAuthenticated]);
 
   const handleFormChange = (e) => {
     const { name, value, files } = e.target;
@@ -253,8 +204,9 @@ function HomePage() {
     e.preventDefault();
     setFormMessage('Сохранение места...');
 
-    if (!isAuthenticated) {
-      setFormMessage('Ошибка: Для добавления места необходимо авторизоваться.');
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setFormMessage('Ошибка: Необходимо авторизоваться.');
       return;
     }
 
@@ -263,13 +215,55 @@ function HomePage() {
       return;
     }
 
-    // Имитация ошибки 400
+    const formData = new FormData();
+    const geometryObject = {
+        type: "Point",
+        coordinates: [newPlaceCoordinates.lng, newPlaceCoordinates.lat]
+    };
+    formData.append('geometry', JSON.stringify(geometryObject));
+    const propertiesObject = {
+        name: newPlaceData.name,
+        description: newPlaceData.description,
+        categories: newPlaceData.categories,
+    };
+    formData.append('properties', JSON.stringify(propertiesObject));
+    if (newPlaceData.image) formData.append('image', newPlaceData.image);
+
     try {
-      throw new Error("Имитация ошибки 400: Неверный запрос или отсутствующие данные.");
+      const headers = {
+        Authorization: `Token ${token}`,
+      };
+      const response = await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/places/`, formData, { headers });
+
+      if (response.status === 201) {
+        setFormMessage('Место успешно добавлено и ожидает модерации!');
+        setNewPlaceCoordinates(null);
+        setNewPlaceData({ name: '', description: '', categories: '', image: null });
+        fetchPlaces();
+        setShowModerationAlert(true); // Показываем уведомление
+      } else {
+        throw new Error('Неожиданный ответ сервера');
+      }
     } catch (error) {
-      console.error('Error adding new place:', error.message);
-      setFormMessage('Ошибка при добавлении места: ' + error.message);
+      console.error('Error adding new place:', error.response?.data || error.message);
+      let errorMessage = 'Неизвестная ошибка.';
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else {
+          errorMessage = JSON.stringify(error.response.data, null, 2);
+        }
+      } else {
+        errorMessage = error.message;
+      }
+      setFormMessage('Ошибка при добавлении места: ' + errorMessage);
     }
+  };
+
+  const handleModerationAlertClose = () => {
+    setShowModerationAlert(false);
   };
 
   return (
@@ -281,33 +275,29 @@ function HomePage() {
         style={{ height: 'calc(100vh - 80px)', width: '100%' }}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <LocationMarker position={userLocation} />
-
         <MapButtons
           onLocateMe={handleLocateMe}
           onAddPlaceModeToggle={handleAddPlaceModeToggle}
           isAddingPlaceMode={isAddingPlaceMode}
-          isAuthenticated={isAuthenticated} 
+          isAuthenticated={isAuthenticated}
         />
-
         <MapClickListener
           isAddingPlaceMode={isAddingPlaceMode && isAuthenticated}
           onMapClickForAdd={handleMapClickForNewPlace}
         />
-
-        {newPlaceCoordinates && isAuthenticated && ( // Маркер только для авторизованных
+        {newPlaceCoordinates && isAuthenticated && (
           <Marker position={newPlaceCoordinates} icon={customMarkerIcon}>
             <Popup>Координаты нового места</Popup>
           </Marker>
         )}
-
         {places.map(place => {
-          const coords = parseWktPoint(place.geometry);
+          const coords = place.geometry ? parseWktPoint(place.geometry) : null;
           if (!coords) {
-            console.warn("Пропускаем место из-за отсутствующих или некорректных координат (WKT):", place);
+            console.warn("Пропускаем место из-за отсутствующих или некорректных координат:", place);
             return null;
           }
           const distanceInfo = place.properties.distance !== null && place.properties.distance !== undefined
@@ -339,7 +329,7 @@ function HomePage() {
         })}
       </MapContainer>
 
-      {newPlaceCoordinates && isAuthenticated && ( // Форма только для авторизованных
+      {newPlaceCoordinates && isAuthenticated && (
         <div style={{
           position: 'absolute',
           top: '50%',
@@ -421,6 +411,29 @@ function HomePage() {
             </div>
           </form>
           {formMessage && <p style={{ marginTop: '10px', textAlign: 'center', color: formMessage.startsWith('Ошибка') ? 'red' : 'green' }}>{formMessage}</p>}
+        </div>
+      )}
+
+      {showModerationAlert && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '10px',
+          boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
+          zIndex: 1002,
+          textAlign: 'center',
+        }}>
+          <p>Ваше место появится на карте после модерации администратором.</p>
+          <button
+            onClick={handleModerationAlertClose}
+            style={{ padding: '8px 15px', marginTop: '10px', borderRadius: '5px', border: 'none', backgroundColor: '#007bff', color: 'white', cursor: 'pointer' }}
+          >
+            ОК
+          </button>
         </div>
       )}
     </div>
