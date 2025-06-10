@@ -347,20 +347,17 @@ function HomePage() {
           const currentLatLng = L.latLng(latitude, longitude);
           setUserLocation(currentLatLng);
           mapInstance.flyTo(currentLatLng, mapInstance.getZoom());
-          fetchPlaces(latitude, longitude);
         },
         (error) => {
           console.error("Error getting user location:", error);
           alert("Не удалось определить вашу геолокацию. Возможно, вы запретили доступ или функция недоступна.");
-          fetchPlaces();
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
     } else {
       alert("Ваш браузер не поддерживает геолокацию.");
-      fetchPlaces();
     }
-  }, [fetchPlaces]);
+  }, []);
 
   const handleAddPlaceModeToggle = useCallback(() => {
     if (!isAuthenticated) {
