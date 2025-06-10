@@ -9,6 +9,7 @@ import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
 import { useAuth } from '../components/AuthContext';
+import { FaMapMarkedAlt, FaFilter, FaSearch, FaStar, FaPlus, FaTimes, FaLocationArrow, FaListUl, FaImage, FaTag, FaAlignLeft, FaStickyNote, FaCommentDots } from 'react-icons/fa';
 
 // Исправление для иконок Leaflet по умолчанию
 delete L.Icon.Default.prototype._getIconUrl;
@@ -85,7 +86,7 @@ function MapButtons({ onLocateMe, onAddPlaceModeToggle, isAddingPlaceMode, isAut
         style={{ width: '50px', height: '50px', borderRadius: '50%', backgroundColor: '#007bff', color: 'white', fontSize: '24px', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}
         title="Моя геолокация"
       >
-        📍
+        <FaLocationArrow />
       </button>
       {isAuthenticated && (
         <button
@@ -93,7 +94,7 @@ function MapButtons({ onLocateMe, onAddPlaceModeToggle, isAddingPlaceMode, isAut
           style={{ width: '50px', height: '50px', borderRadius: '50%', backgroundColor: isAddingPlaceMode ? '#ffc107' : '#28a745', color: 'white', fontSize: '24px', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}
           title={isAddingPlaceMode ? "Отменить добавление" : "Добавить новое место"}
         >
-          {isAddingPlaceMode ? '✖' : '+'}
+          {isAddingPlaceMode ? <FaTimes /> : <FaPlus />}
         </button>
       )}
     </div>
@@ -224,54 +225,85 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
   const properties = place.properties || {};
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: 'white', borderRadius: 10, padding: 24, minWidth: 350, maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
-        <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', fontSize: 24, cursor: 'pointer' }}>×</button>
-        <h2>{properties.name}</h2>
+      <div style={{ background: '#fff', borderRadius: 18, boxShadow: '0 4px 32px #0002', padding: 32, minWidth: 350, maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 18, background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#888' }} title="Закрыть"><FaTimes /></button>
+        <h2 style={{ display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: 26, marginBottom: 10 }}><FaMapMarkedAlt style={{ marginRight: 10, color: '#007bff' }} /> {properties.name}</h2>
         {distanceToUser !== null && (
-          <p style={{ color: '#d32f2f', fontWeight: 600 }}>Расстояние до вас: {distanceToUser < 1000 ? `${distanceToUser} м` : `${(distanceToUser/1000).toFixed(2)} км`}</p>
+          <p style={{ color: '#d32f2f', fontWeight: 600, marginBottom: 8 }}><FaLocationArrow style={{ marginRight: 6 }} />Расстояние до вас: {distanceToUser < 1000 ? `${distanceToUser} м` : `${(distanceToUser/1000).toFixed(2)} км`}</p>
         )}
-        <p><strong>Описание:</strong> {properties.description}</p>
-        <p><strong>Категории:</strong> {properties.categories}</p>
-        {properties.image && <img src={properties.image} alt={properties.name} style={{ maxWidth: '100%', margin: '10px 0' }} />}
+        <div style={{ marginBottom: 10, color: '#444', fontSize: 16 }}><FaAlignLeft style={{ marginRight: 7, color: '#888' }} /><strong>Описание:</strong> {properties.description}</div>
+        <div style={{ marginBottom: 10, color: '#444', fontSize: 16 }}><FaTag style={{ marginRight: 7, color: '#888' }} /><strong>Категории:</strong> {properties.categories}</div>
+        {properties.image && <img src={properties.image} alt={properties.name} style={{ maxWidth: '100%', margin: '10px 0', borderRadius: 10, boxShadow: '0 2px 8px #0001' }} />}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
+          <button onClick={handleToggleFavorite} disabled={favoriteLoading} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22 }} title={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}>
+            <FaStar color={isFavorite ? '#FFD600' : '#bbb'} />
+          </button>
+          <span style={{ fontWeight: 500, color: isFavorite ? '#FFD600' : '#888', fontSize: 16 }}>
+            {isFavorite ? 'В избранном!' : 'Добавить в избранное'}
+          </span>
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <h4 style={{ display: 'flex', alignItems: 'center', fontSize: 18, margin: 0, marginBottom: 8 }}><FaStickyNote style={{ marginRight: 7, color: '#43a047' }} /> Заметки</h4>
+          {notes.length === 0 ? <p style={{ color: '#888' }}>Нет заметок</p> : (
+            <ul style={{ paddingLeft: 0, listStyle: 'none' }}>
+              {notes.map(note => (
+                <li key={note.id} style={{ marginBottom: 6, fontSize: 15 }}>
+                  <b>{note.text}</b>
+                  {note.image && <img src={note.image} alt="note" style={{ maxWidth: 60, marginLeft: 8, borderRadius: 6 }} />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <h4 style={{ display: 'flex', alignItems: 'center', fontSize: 18, margin: 0, marginBottom: 8 }}><FaCommentDots style={{ marginRight: 7, color: '#ff9800' }} /> Комментарии</h4>
+          {comments.length === 0 ? <p style={{ color: '#888' }}>Нет комментариев</p> : (
+            <ul style={{ paddingLeft: 0, listStyle: 'none' }}>
+              {comments.map(comment => (
+                <li key={comment.id} style={{ marginBottom: 6, fontSize: 15 }}>{comment.text}</li>
+              ))}
+            </ul>
+          )}
+        </div>
         {isLoggedIn && (
-          <form onSubmit={handleFormSubmit} style={{ marginTop: 20 }}>
+          <form onSubmit={handleFormSubmit} style={{ marginTop: 24, background: '#f7f8fa', borderRadius: 12, padding: 18, boxShadow: '0 2px 8px #0001' }}>
             <div style={{ marginBottom: 10 }}>
-              <label htmlFor="formType">Что вы хотите добавить? </label>
-              <select id="formType" value={formType} onChange={e => { setFormType(e.target.value); setFormMsg(''); }}>
+              <label htmlFor="formType" style={{ fontWeight: 600, marginRight: 8 }}>Что вы хотите добавить?</label>
+              <select id="formType" value={formType} onChange={e => { setFormType(e.target.value); setFormMsg(''); }} style={{ borderRadius: 8, padding: 6, fontSize: 15 }}>
                 <option value="note">Заметка</option>
                 <option value="comment">Комментарий</option>
               </select>
             </div>
             {formType === 'note' ? (
               <>
-                <h3>Добавить заметку</h3>
+                <h3 style={{ display: 'flex', alignItems: 'center', fontSize: 18, margin: '10px 0' }}><FaStickyNote style={{ marginRight: 7, color: '#43a047' }} /> Добавить заметку</h3>
                 <textarea
                   name="text"
                   value={noteForm.text}
                   onChange={handleNoteFormChange}
                   placeholder="Текст заметки"
                   rows={4}
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', borderRadius: 8, border: '1px solid #ccc', padding: 10, fontSize: 15, marginBottom: 8 }}
                 />
                 <div style={{ margin: '10px 0' }}>
-                  Картинка: <input type="file" name="image" accept="image/*" onChange={handleNoteFormChange} />
+                  <FaImage style={{ marginRight: 6, color: '#888' }} /> Картинка: <input type="file" name="image" accept="image/*" onChange={handleNoteFormChange} />
                 </div>
               </>
             ) : (
               <>
-                <h3>Добавить комментарий</h3>
+                <h3 style={{ display: 'flex', alignItems: 'center', fontSize: 18, margin: '10px 0' }}><FaCommentDots style={{ marginRight: 7, color: '#ff9800' }} /> Добавить комментарий</h3>
                 <textarea
                   name="text"
                   value={commentForm.text}
                   onChange={handleCommentFormChange}
                   placeholder="Текст комментария"
                   rows={3}
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', borderRadius: 8, border: '1px solid #ccc', padding: 10, fontSize: 15, marginBottom: 8 }}
                 />
               </>
             )}
-            <button type="submit" disabled={formLoading} style={{ width: '100%', padding: 8, background: '#eee', border: 'none', fontSize: 18 }}>
-              {formLoading ? 'Отправка...' : 'Добавить'}
+            <button type="submit" disabled={formLoading} style={{ width: '100%', padding: 10, background: '#007bff', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 17, marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              {formLoading ? 'Отправка...' : formType === 'note' ? <><FaPlus /> Добавить заметку</> : <><FaPlus /> Добавить комментарий</>}
             </button>
             {formMsg && <div style={{ color: formMsg.startsWith('Ошибка') ? 'red' : 'orange', marginTop: 8 }}>{formMsg}</div>}
           </form>
@@ -279,39 +311,6 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
         {showToast && (
           <div style={{ position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)', background: '#4caf50', color: 'white', padding: '12px 24px', borderRadius: 8, zIndex: 9999, fontSize: 18 }}>
             {formType === 'note' ? 'Заметка' : 'Комментарий'} отправлен на модерацию!
-          </div>
-        )}
-        <div style={{ marginTop: 20 }}>
-          <h4>Заметки</h4>
-          {notes.length === 0 ? <p>Нет заметок</p> : (
-            <ul>
-              {notes.map(note => (
-                <li key={note.id}>
-                  <b>{note.text}</b>
-                  {note.image && <img src={note.image} alt="note" style={{ maxWidth: 60, marginLeft: 8 }} />}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div style={{ marginTop: 20 }}>
-          <h4>Комментарии</h4>
-          {comments.length === 0 ? <p>Нет комментариев</p> : (
-            <ul>
-              {comments.map(comment => (
-                <li key={comment.id}>{comment.text}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-        {isLoggedIn && (
-          <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button onClick={handleToggleFavorite} disabled={favoriteLoading} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}>
-              <StarIcon filled={isFavorite} />
-            </button>
-            <span style={{ fontWeight: 500, color: isFavorite ? '#FFD600' : '#888', fontSize: 15 }}>
-              {isFavorite ? 'В избранном!' : 'Добавь в избранное!'}
-            </span>
           </div>
         )}
       </div>
@@ -344,6 +343,18 @@ function Chip({ label, onDelete }) {
       {label}
       {onDelete && <span onClick={onDelete} style={{ marginLeft: 6, cursor: 'pointer', color: '#888', fontWeight: 700 }}>&times;</span>}
     </span>
+  );
+}
+
+// --- ДОБАВЛЯЮ КОМПОНЕНТ ДЛЯ КАРТОЧКИ СЕКЦИИ ---
+function SectionCard({ icon, title, children, style }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 2px 12px #0001', margin: '18px 0', padding: 20, ...style }}>
+      <h2 style={{ display: 'flex', alignItems: 'center', fontSize: 22, margin: 0, marginBottom: 12 }}>
+        <span style={{ marginRight: 10, fontSize: 22 }}>{icon}</span> {title}
+      </h2>
+      {children}
+    </div>
   );
 }
 
@@ -624,8 +635,8 @@ function HomePage() {
 
   // --- UI ФИЛЬТРОВ ---
   const renderFilters = () => (
-    <div style={{ background: '#f7f7f7', padding: 16, borderRadius: 8, marginBottom: 12, maxWidth: 900, margin: '0 auto', boxShadow: '0 2px 8px #0001' }}>
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div style={{ background: '#fff', padding: 20, borderRadius: 14, boxShadow: '0 2px 12px #0001', minWidth: 260, maxWidth: 340 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
         <input
           type="text"
           placeholder="Поиск по названию или категории..."
@@ -687,210 +698,188 @@ function HomePage() {
   );
 
   return (
-    <div className="main">
-      <button
-        onClick={() => setFiltersOpen(f => !f)}
-        style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 2001, background: '#007bff', color: 'white', border: 'none', borderRadius: 8, padding: '8px 24px', fontSize: 18, fontWeight: 600, boxShadow: '0 2px 8px #0002', cursor: 'pointer' }}
-      >
-        {filtersOpen ? 'Скрыть фильтры' : 'Фильтры'}
-      </button>
-      {filtersOpen && renderFilters()}
-      <MapContainer
-        center={kazanCoordinates}
-        zoom={initialZoom}
-        scrollWheelZoom={true}
-        style={{ height: 'calc(100vh - 80px)', width: '100%' }}
-      >
-        <TileLayer
-          attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {/* Отметка пользователя, если включён фильтр "Поближе ко мне" */}
-        {nearMe && userLocation && (
-          <Marker position={userLocation} icon={userLocationIcon}>
-            <Popup>Вы находитесь здесь!</Popup>
-          </Marker>
+    <div style={{ background: '#f7f8fa', minHeight: '100vh', width: '100vw', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', height: 'calc(100vh - 70px)', maxWidth: '100vw', margin: 0, padding: 0, position: 'relative' }}>
+        {/* --- Фильтры поверх карты с затемнением --- */}
+        {filtersOpen && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(0,0,0,0.18)',
+            zIndex: 1001,
+          }} onClick={() => setFiltersOpen(false)} />
         )}
-        <LocationMarker position={userLocation} />
-        <MapButtons
-          onLocateMe={handleLocateMe}
-          onAddPlaceModeToggle={handleAddPlaceModeToggle}
-          isAddingPlaceMode={isAddingPlaceMode}
-          isAuthenticated={isAuthenticated}
-        />
-        <MapClickListener
-          isAddingPlaceMode={isAddingPlaceMode && isAuthenticated}
-          onMapClickForAdd={handleMapClickForNewPlace}
-        />
-        {newPlaceCoordinates && isAuthenticated && (
-          <Marker position={newPlaceCoordinates} icon={customMarkerIcon}>
-            <Popup>Координаты нового места</Popup>
-          </Marker>
-        )}
-        {showSearch && searchResults.length > 0 ? (
-          searchResults.map(place => {
-            const coords = place.geometry ? parseWktPoint(place.geometry) : null;
-            if (!coords) return null;
-            return (
-              <Marker
-                position={[coords.latitude, coords.longitude]}
-                icon={customMarkerIcon}
-                key={place.id || place.properties.id}
-                eventHandlers={{
-                  click: () => setSelectedPlace(place)
-                }}
-              >
-                <Popup>
-                  <b>{place.properties?.name || place.name}</b><br/>
-                  <span style={{ color: '#888' }}>{place.properties?.categories || place.categories}</span><br/>
-                  {userLocation && (
-                    <span>Расстояние: {(() => {
-                      const toRad = deg => deg * Math.PI / 180;
-                      const R = 6371; // км
-                      const dLat = toRad(coords.latitude - userLocation.lat);
-                      const dLon = toRad(coords.longitude - userLocation.lng);
-                      const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(userLocation.lat)) * Math.cos(toRad(coords.latitude)) * Math.sin(dLon/2) ** 2;
-                      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                      const dist = R * c;
-                      return dist < 1 ? `${Math.round(dist*1000)} м` : `${dist.toFixed(2)} км`;
-                    })()}</span>
-                  )}
-                </Popup>
-              </Marker>
-            );
-          })
-        ) : showSearch && searchResults.length === 0 ? (
-          <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', color: '#d32f2f', fontWeight: 600, background: '#fff', padding: 16, borderRadius: 8, zIndex: 1000 }}>Ничего не найдено</div>
-        ) : filteredPlaces.length > 0 ? (
-          filteredPlaces.map(place => {
-            const coords = place.geometry ? parseWktPoint(place.geometry) : null;
-            if (!coords) return null;
-            return (
-              <Marker
-                position={[coords.latitude, coords.longitude]}
-                icon={customMarkerIcon}
-                key={place.id || place.properties.id}
-                eventHandlers={{
-                  click: () => setSelectedPlace(place)
-                }}
-              />
-            );
-          })
-        ) : (
-          <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', color: '#d32f2f', fontWeight: 600, background: '#fff', padding: 16, borderRadius: 8, zIndex: 1000 }}>Нет мест, соответствующих фильтру</div>
-        )}
-      </MapContainer>
-
-      {newPlaceCoordinates && isAuthenticated && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
-          zIndex: 1001,
-          width: '90%',
-          maxWidth: '400px',
-          maxHeight: '90vh',
-          overflowY: 'auto'
-        }}>
-          <h3 style={{ marginTop: 0, marginBottom: '15px' }}>Добавить новое место</h3>
-          <form onSubmit={handleNewPlaceSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div>
-              <label htmlFor="newPlaceName" style={{ display: 'block', marginBottom: '5px' }}>Название:</label>
-              <input
-                type="text"
-                id="newPlaceName"
-                name="name"
-                value={newPlaceData.name}
-                onChange={handleFormChange}
-                required
-                style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
-              />
-            </div>
-            <div>
-              <label htmlFor="newPlaceDescription" style={{ display: 'block', marginBottom: '5px' }}>Описание:</label>
-              <textarea
-                id="newPlaceDescription"
-                name="description"
-                value={newPlaceData.description}
-                onChange={handleFormChange}
-                required
-                rows="4"
-                style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
-              ></textarea>
-            </div>
-            <div>
-              <label htmlFor="newPlaceCategories" style={{ display: 'block', marginBottom: '5px' }}>Категории (через запятую):</label>
-              <input
-                type="text"
-                id="newPlaceCategories"
-                name="categories"
-                value={newPlaceData.categories}
-                onChange={handleFormChange}
-                style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
-                placeholder="Например: миф, легенда, история"
-              />
-            </div>
-            <div>
-              <label htmlFor="newPlaceImage" style={{ display: 'block', marginBottom: '5px' }}>Изображение:</label>
-              <input
-                type="file"
-                id="newPlaceImage"
-                name="image"
-                accept="image/*"
-                onChange={handleFormChange}
-                style={{ width: '100%', padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
-              />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '15px' }}>
-              <button
-                type="button"
-                onClick={() => setNewPlaceCoordinates(null)}
-                style={{ padding: '8px 15px', borderRadius: '5px', border: '1px solid #6c757d', backgroundColor: '#6c757d', color: 'white', cursor: 'pointer' }}
-              >
-                Отмена
-              </button>
-              <button
-                type="submit"
-                style={{ padding: '8px 15px', borderRadius: '5px', border: 'none', backgroundColor: '#007bff', color: 'white', cursor: 'pointer' }}
-              >
-                Сохранить место
-              </button>
-            </div>
-          </form>
-          {formMessage && <p style={{ marginTop: '10px', textAlign: 'center', color: formMessage.startsWith('Ошибка') ? 'red' : 'green' }}>{formMessage}</p>}
-        </div>
-      )}
-
-      {showModerationAlert && (
-        <div style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '10px',
-          boxShadow: '0 5px 15px rgba(0,0,0,0.3)',
-          zIndex: 1002,
-          textAlign: 'center',
-        }}>
-          <p>Ваше место появится на карте после модерации администратором.</p>
+        <div style={{ position: 'relative', zIndex: 1020 }}>
           <button
-            onClick={handleModerationAlertClose}
-            style={{ padding: '8px 15px', marginTop: '10px', borderRadius: '5px', border: 'none', backgroundColor: '#007bff', color: 'white', cursor: 'pointer' }}
+            onClick={() => setFiltersOpen(f => !f)}
+            style={{
+              position: 'fixed',
+              left: 24,
+              top: '60%',
+              transform: 'translateY(-50%)',
+              zIndex: 1022,
+              background: '#007bff',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0 12px 12px 0',
+              padding: '14px 20px',
+              fontWeight: 700,
+              fontSize: 20,
+              boxShadow: '0 4px 24px #0003',
+              cursor: 'pointer',
+              transition: 'left 0.2s',
+              outline: '3px solid #fff',
+            }}
           >
-            ОК
+            {filtersOpen ? '⟨' : 'Фильтры'}
           </button>
+          <div style={{
+            position: 'fixed',
+            left: filtersOpen ? 0 : -340,
+            top: 0,
+            height: '100vh',
+            width: 300,
+            background: '#fff',
+            boxShadow: '2px 0 16px #0002',
+            borderRadius: '0 14px 14px 0',
+            padding: filtersOpen ? 20 : 0,
+            overflowY: 'auto',
+            transition: 'left 0.25s cubic-bezier(.4,2,.6,1)',
+            zIndex: 1025
+          }}>
+            {filtersOpen && renderFilters()}
+          </div>
+        </div>
+        {/* --- Карта с рамкой, уменьшена на 20% --- */}
+        <div style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+          <div style={{
+            borderRadius: 22,
+            boxShadow: '0 4px 32px #0002',
+            border: '4px solid #007bff',
+            overflow: 'hidden',
+            width: '80%',
+            height: '80%',
+            minWidth: 320,
+            minHeight: 320,
+            background: '#fff',
+            position: 'relative',
+            transition: 'width 0.2s, height 0.2s',
+          }}>
+            <MapContainer
+              center={kazanCoordinates}
+              zoom={initialZoom}
+              scrollWheelZoom={true}
+              style={{ height: '100%', width: '100%' }}
+            >
+              <TileLayer
+                attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {/* Отметка пользователя, если включён фильтр "Поближе ко мне" */}
+              {nearMe && userLocation && (
+                <Marker position={userLocation} icon={userLocationIcon}>
+                  <Popup>Вы находитесь здесь!</Popup>
+                </Marker>
+              )}
+              <LocationMarker position={userLocation} />
+              <MapButtons
+                onLocateMe={handleLocateMe}
+                onAddPlaceModeToggle={handleAddPlaceModeToggle}
+                isAddingPlaceMode={isAddingPlaceMode}
+                isAuthenticated={isAuthenticated}
+              />
+              <MapClickListener
+                isAddingPlaceMode={isAddingPlaceMode && isAuthenticated}
+                onMapClickForAdd={handleMapClickForNewPlace}
+              />
+              {newPlaceCoordinates && isAuthenticated && (
+                <Marker position={newPlaceCoordinates} icon={customMarkerIcon}>
+                  <Popup>Координаты нового места</Popup>
+                </Marker>
+              )}
+              {showSearch && searchResults.length > 0 ? (
+                searchResults.map(place => {
+                  const coords = place.geometry ? parseWktPoint(place.geometry) : null;
+                  if (!coords) return null;
+                  return (
+                    <Marker
+                      position={[coords.latitude, coords.longitude]}
+                      icon={customMarkerIcon}
+                      key={place.id || place.properties.id}
+                      eventHandlers={{
+                        click: () => setSelectedPlace(place)
+                      }}
+                    >
+                      <Popup>{place.properties?.name || place.name}</Popup>
+                    </Marker>
+                  );
+                })
+              ) : (
+                filteredPlaces.map(place => {
+                  const coords = place.geometry ? parseWktPoint(place.geometry) : null;
+                  if (!coords) return null;
+                  return (
+                    <Marker
+                      position={[coords.latitude, coords.longitude]}
+                      icon={customMarkerIcon}
+                      key={place.id || place.properties.id}
+                      eventHandlers={{
+                        click: () => setSelectedPlace(place)
+                      }}
+                    >
+                      <Popup>{place.properties?.name || place.name}</Popup>
+                    </Marker>
+                  );
+                })
+              )}
+            </MapContainer>
+          </div>
+        </div>
+      </div>
+      {/* Модалка информации о месте (оставляю как есть) */}
+      {selectedPlace && (
+        <PlaceInfoModal
+          place={selectedPlace}
+          onClose={() => setSelectedPlace(null)}
+          userLocation={userLocation}
+        />
+      )}
+      {/* Модалка добавления нового места (оставляю как есть) */}
+      {newPlaceCoordinates && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.3)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <form onSubmit={handleNewPlaceSubmit} style={{ background: 'white', borderRadius: 18, boxShadow: '0 4px 32px #0002', padding: 32, minWidth: 320, maxWidth: 400, position: 'relative' }}>
+            <button type="button" onClick={() => { setIsAddingPlaceMode(false); setNewPlaceCoordinates(null); }} style={{ position: 'absolute', top: 14, right: 18, background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#888' }} title="Отмена"><FaTimes /></button>
+            <h3 style={{ display: 'flex', alignItems: 'center', fontSize: 22, fontWeight: 700, marginBottom: 18 }}><FaMapMarkedAlt style={{ marginRight: 10, color: '#007bff' }} /> Новое место</h3>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontWeight: 600, marginBottom: 4, display: 'block' }}><FaMapMarkedAlt style={{ marginRight: 6, color: '#007bff' }} /> Название:</label>
+              <input type="text" name="name" value={newPlaceData.name} onChange={handleFormChange} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ccc', fontSize: 16 }} required />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontWeight: 600, marginBottom: 4, display: 'block' }}><FaAlignLeft style={{ marginRight: 6, color: '#888' }} /> Описание:</label>
+              <textarea name="description" value={newPlaceData.description} onChange={handleFormChange} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ccc', fontSize: 16 }} rows={3} required />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontWeight: 600, marginBottom: 4, display: 'block' }}><FaTag style={{ marginRight: 6, color: '#888' }} /> Категории (через запятую):</label>
+              <input type="text" name="categories" value={newPlaceData.categories} onChange={handleFormChange} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ccc', fontSize: 16 }} required />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontWeight: 600, marginBottom: 4, display: 'block' }}><FaImage style={{ marginRight: 6, color: '#888' }} /> Картинка:</label>
+              <input type="file" name="image" accept="image/*" onChange={handleFormChange} />
+            </div>
+            <button type="submit" style={{ width: '100%', padding: 12, background: '#28a745', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><FaPlus /> Сохранить</button>
+            {formMessage && <div style={{ color: formMessage.startsWith('Ошибка') ? 'red' : 'orange', marginTop: 8 }}>{formMessage}</div>}
+          </form>
         </div>
       )}
-
-      {selectedPlace && (
-        <PlaceInfoModal place={selectedPlace} onClose={() => setSelectedPlace(null)} userLocation={userLocation} />
+      {/* Уведомление о модерации */}
+      {showModerationAlert && (
+        <div style={{ position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)', background: '#ff9800', color: 'white', padding: '12px 24px', borderRadius: 8, zIndex: 9999, fontSize: 18 }}>
+          Место отправлено на модерацию!
+          <button onClick={handleModerationAlertClose} style={{ marginLeft: 18, background: 'none', border: 'none', color: 'white', fontWeight: 700, fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
       )}
     </div>
   );

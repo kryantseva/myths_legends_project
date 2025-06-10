@@ -1,8 +1,9 @@
 // frontend/myths_legends_app/src/pages/ModerationPage.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth } from '../components/AuthContext';
 import axios from 'axios';
 import './ModerationPage.css'; // Убедитесь, что этот файл существует и содержит стили
+import { FaCheckCircle, FaTimesCircle, FaUser, FaMapMarkedAlt, FaStickyNote, FaCommentDots, FaClock } from 'react-icons/fa';
 
 function ModerationPage() {
   const { isLoggedIn, currentUser, isModeratorOrAdmin } = useAuth();
@@ -184,136 +185,41 @@ function ModerationPage() {
   if (!isLoggedIn || !isModeratorOrAdmin) return null; // Render nothing if not authorized
 
   return (
-    <div className="moderation-container">
-      <h2>Панель модерации</h2>
-      {pendingItems.length === 0 ? (
-        <p>Нет элементов, требующих модерации.</p>
-      ) : (
-        <ul className="moderation-list">
-          {pendingItems.map(item => (
-            <li key={`${item.type}-${item.id}`} className="moderation-item">
-              <div>
-                <strong>{item.type === 'place' ? 'Место' : item.type === 'note' ? 'Заметка' : 'Комментарий'}: </strong>
-                {item.type === 'place' ? item.properties?.name || item.name : item.text || item.content}
-                <br />
-                <small>Автор: {item.user.username} ({item.user.is_superuser ? 'Admin' : item.user.groups.some(group => group.name === 'Moderators') ? 'Модератор' : 'Пользователь'})</small>
-                <br />
-                <small>Размещено: {new Date(item.created_at).toLocaleString()}</small>
-              </div>
-              <div>
-                <button
-                  onClick={() => openPopup(item)}
-                  style={{ marginRight: '10px', backgroundColor: '#007bff', color: 'white' }}
-                >
-                  Просмотреть
-                </button>
-                <button
-                  onClick={() => handleModeration(item.id, item.type, 'approve')}
-                  style={{ marginRight: '10px', backgroundColor: '#28a745', color: 'white' }}
-                >
-                  Одобрить
-                </button>
-                <button
-                  onClick={() => handleRejectClick(item)}
-                  style={{ backgroundColor: '#dc3545', color: 'white' }}
-                >
-                  Отклонить
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {selectedItem && (
-        <div className="modal" onClick={closePopup}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3>Просмотр: {selectedItem.type === 'place' ? 'Место' : selectedItem.type === 'note' ? 'Заметка' : 'Комментарий'}</h3>
-            {loadingPopupData ? (
-              <p style={{ textAlign: 'center' }}>Загрузка подробностей...</p>
-            ) : popupError ? (
-              <p style={{ color: 'red', textAlign: 'center' }}>{popupError}</p>
-            ) : (
-              <>
-                {/* Общие поля для всех типов в модальном окне */}
-                <p><strong>Автор:</strong> {selectedItem.user.username} ({selectedItem.user.is_superuser ? 'Admin' : selectedItem.user.groups.some(group => group.name === 'Moderators') ? 'Модератор' : 'Пользователь'})</p>
-                <p><strong>Размещено:</strong> {new Date(selectedItem.created_at).toLocaleString()}</p>
-
-                {/* Подробности для Места */}
-                {selectedItem.type === 'place' && (
-                  <>
-                    <p><strong>Название:</strong> {selectedItem.properties?.name || selectedItem.name}</p>
-                    {selectedItem.properties?.description && (
-                      <p><strong>Описание:</strong> {selectedItem.properties.description}</p>
-                    )}
-                  </>
-                )}
-
-                {/* Подробности для Заметки */}
-                {selectedItem.type === 'note' && (
-                  <>
-                    {selectedItem.place_details && (
-                      <>
-                        <p><strong>Место:</strong> {selectedItem.place_details.properties?.name || selectedItem.place_details.name}</p>
-                        <p><strong>Автор места:</strong> {selectedItem.place_details.properties?.owner?.username || selectedItem.place_details.owner?.username || 'Неизвестно'}</p>
-                        {selectedItem.place_details.properties?.description && (
-                          <p><strong>Описание места:</strong> {selectedItem.place_details.properties.description}</p>
-                        )}
-                      </>
-                    )}
-                    <p><strong>Текст заметки:</strong> {selectedItem.text}</p>
-                  </>
-                )}
-
-                {/* Подробности для Комментария */}
-                {selectedItem.type === 'comment' && (
-                  <>
-                    {selectedItem.place_details && (
-                      <p><strong>Место:</strong> {selectedItem.place_details.properties?.name || selectedItem.place_details.name}</p>
-                    )}
-                    <p><strong>Текст комментария:</strong> {selectedItem.text}</p>
-                    <p><strong>Дата:</strong> {selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleString() : ''}</p>
-                  </>
-                )}
-              </>
-            )}
-            <div className="modal-actions">
-              <button onClick={() => handleModeration(selectedItem.id, selectedItem.type, 'approve')} style={{ backgroundColor: '#28a745', color: 'white' }} disabled={loadingPopupData}>Одобрить</button>
-              <button onClick={() => handleModeration(selectedItem.id, selectedItem.type, 'reject')} style={{ backgroundColor: '#dc3545', color: 'white', marginLeft: '10px' }} disabled={loadingPopupData}>Отклонить</button>
-              <button onClick={closePopup} style={{ backgroundColor: '#6c757d', color: 'white', marginLeft: '10px' }}>Закрыть</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showRejectModal && selectedItem && (
-        <div className="modal" onClick={() => setShowRejectModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3>Причина отклонения</h3>
-            <textarea
-              value={rejectReason}
-              onChange={e => setRejectReason(e.target.value)}
-              rows={4}
-              style={{ width: '100%', marginBottom: 10 }}
-              placeholder="Укажите причину отклонения (обязательно)"
-              autoFocus
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                onClick={handleRejectSubmit}
-                style={{ backgroundColor: '#dc3545', color: 'white' }}
-                disabled={!rejectReason.trim() || rejectLoading}
-              >
-                Отклонить
-              </button>
-              <button
-                onClick={() => setShowRejectModal(false)}
-                style={{ backgroundColor: '#6c757d', color: 'white' }}
-                disabled={rejectLoading}
-              >
-                Отмена
-              </button>
-            </div>
+    <div className="moderation-container" style={{ minHeight: '100vh', background: '#f7f8fa', padding: '32px 0', position: 'relative' }}>
+      <div style={{ maxWidth: 800, margin: '0 auto', background: '#fff', borderRadius: 18, boxShadow: '0 4px 32px #0002', padding: 36 }}>
+        <h2 style={{ display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: 28, marginBottom: 24 }}><FaClock style={{ marginRight: 12, color: '#ff9800' }} /> Панель модерации</h2>
+        {pendingItems.length === 0 ? (
+          <p style={{ color: '#888', fontSize: 18, textAlign: 'center' }}>Нет элементов, требующих модерации.</p>
+        ) : (
+          <ul className="moderation-list" style={{ padding: 0, listStyle: 'none' }}>
+            {pendingItems.map((item, idx) => (
+              <li key={`${item.type}-${item.id}`} className="moderation-item" style={{ background: '#f9f9fb', borderRadius: 14, boxShadow: '0 2px 12px #0001', margin: '18px 0', padding: 22, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontWeight: 600, fontSize: 18, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {item.type === 'place' ? <FaMapMarkedAlt color="#007bff" /> : item.type === 'note' ? <FaStickyNote color="#43a047" /> : <FaCommentDots color="#ff9800" />}
+                  {item.type === 'place' ? 'Место' : item.type === 'note' ? 'Заметка' : 'Комментарий'}:
+                  <span style={{ marginLeft: 8 }}>{item.type === 'place' ? item.properties?.name || item.name : item.text || item.content}</span>
+                </div>
+                <div style={{ color: '#888', fontSize: 15, marginBottom: 4 }}>
+                  Автор: <FaUser style={{ marginRight: 4 }} />{item.user.username} ({item.user.is_superuser ? 'Admin' : item.user.groups.some(group => group.name === 'Moderators') ? 'Модератор' : 'Пользователь'})<br />
+                  <span style={{ color: '#aaa' }}>Создано: {item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                  <button onClick={() => handleModeration(item.id, item.type, 'approve')} style={{ background: '#43a047', color: 'white', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}><FaCheckCircle /> Одобрить</button>
+                  <button onClick={() => handleRejectClick(item)} style={{ background: '#d32f2f', color: 'white', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, fontSize: 16, display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer' }}><FaTimesCircle /> Отклонить</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {/* Модалка отклонения */}
+      {showRejectModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.18)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 4px 32px #0002', padding: 32, minWidth: 320, maxWidth: 400, width: '100%', position: 'relative' }}>
+            <button onClick={() => setShowRejectModal(false)} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#888' }}>×</button>
+            <h3 style={{ marginBottom: 18, fontWeight: 700, fontSize: 22, color: '#d32f2f' }}><FaTimesCircle style={{ marginRight: 8 }} /> Причина отклонения</h3>
+            <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} rows={4} style={{ width: '100%', borderRadius: 8, border: '1px solid #ccc', padding: 10, fontSize: 15, marginBottom: 18 }} placeholder="Опишите причину отклонения..." />
+            <button onClick={handleRejectSubmit} disabled={rejectLoading || !rejectReason.trim()} style={{ width: '100%', padding: 10, background: '#d32f2f', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 17, cursor: 'pointer', opacity: rejectLoading || !rejectReason.trim() ? 0.7 : 1 }}>Отклонить</button>
           </div>
         </div>
       )}
