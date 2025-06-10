@@ -104,9 +104,7 @@ function ProfilePage() {
         // Избранные места
         const favoritesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/`, { headers });
         const allPlaces = favoritesResponse.data.features || favoritesResponse.data.results || favoritesResponse.data;
-        const userFavorites = allPlaces.filter(place =>
-          place.favorites && place.favorites.some(fav => fav === currentUser.id)
-        );
+        const userFavorites = allPlaces.filter(place => place.properties && place.properties.is_favorite);
         setFavoritePlaces(userFavorites);
         setLoading(false);
       } catch (err) {

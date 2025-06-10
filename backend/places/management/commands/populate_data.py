@@ -51,11 +51,9 @@ class Command(BaseCommand):
             if created:
                 user.set_password(data['password'])
                 user.save()
-                Token.objects.get_or_create(user=user)
-                regular_users.append(user)
-                self.stdout.write(self.style.SUCCESS(f'Created user: {user.username}'))
-            else:
-                regular_users.append(user)
+            Token.objects.get_or_create(user=user)
+            regular_users.append(user)
+            self.stdout.write(self.style.SUCCESS(f'Created or updated user: {user.username}'))
 
         superuser, _ = User.objects.get_or_create(username='admin', defaults={'email': 'admin@example.com', 'is_superuser': True, 'is_staff': True})
         superuser.set_password('admin123')
@@ -123,6 +121,17 @@ class Command(BaseCommand):
 
         # Оставляем только approved места для заметок и комментариев
         approved_places = [p for p in created_places if getattr(p, 'status', None) == 'approved']
+
+        # --- ДОБАВЛЯЕМ ИЗБРАННЫЕ МЕСТА ДЛЯ КАЖДОГО ПОЛЬЗОВАТЕЛЯ ---
+        self.stdout.write(self.style.MIGRATE_HEADING('Assigning favorite places for each user...'))
+        for user in regular_users:
+            favorites = random.sample(approved_places, min(5, len(approved_places)))
+            for place in favorites:
+                place.favorites.add(user)
+            user.refresh_from_db()
+            actual_favs = list(user.favorite_places.values_list('name', flat=True))
+            print(f'User {user.username} favorites in DB: {actual_favs}')
+            self.stdout.write(self.style.SUCCESS(f'  {user.username} favorites: {[p.name for p in favorites]}'))
 
         self.stdout.write(self.style.MIGRATE_HEADING('Creating legendary notes for places...'))
         note_texts = [
@@ -235,9 +244,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Database population complete!'))
 
         self.stdout.write(self.style.MIGRATE_HEADING('\n--- User Tokens ---'))
-        for user in regular_users:
-            token = Token.objects.get(user=user)
-            self.stdout.write(f'User: {user.username}, Token: {token.key}')
+        for user in User.objects.all():
+            token = Token.objects.get_or_create(user=user)[0]
+            print(f'User {user.username} token: {token.key}')
         
         superuser_token = Token.objects.get(user=superuser)
         self.stdout.write(f'User: {superuser.username} (Superuser), Token: {superuser_token.key}')

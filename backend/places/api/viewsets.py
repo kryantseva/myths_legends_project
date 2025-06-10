@@ -23,7 +23,9 @@ class PlaceViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'name', 'notes_count', 'distance']
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'toggle_favorite']:
+        if self.action == 'toggle_favorite':
+            self.permission_classes = [IsAuthenticated]
+        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
             self.permission_classes = [IsAuthenticated, IsOwnerOrAdminOrReadOnly]
         elif self.action in ['list', 'retrieve', 'nearest']:
             self.permission_classes = [AllowAny]

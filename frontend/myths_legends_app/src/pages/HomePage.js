@@ -111,6 +111,8 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
   const [formLoading, setFormLoading] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [distanceToUser, setDistanceToUser] = useState(null);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     if (!place) return;
@@ -146,6 +148,10 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
       }
     }
   }, [userLocation, place.geometry]);
+
+  useEffect(() => {
+    setIsFavorite(place?.properties?.is_favorite ?? place?.is_favorite ?? false);
+  }, [place]);
 
   const handleNoteFormChange = (e) => {
     const { name, value, files } = e.target;
@@ -200,6 +206,20 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
       }
     }
   };
+
+  const handleToggleFavorite = async () => {
+    if (!isLoggedIn || !place) return;
+    setFavoriteLoading(true);
+    try {
+      const response = await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/places/${place.id}/toggle_favorite/`, {}, { headers: { Authorization: `Token ${authToken}` } });
+      console.log('toggle_favorite response:', response.status, response.data);
+      setIsFavorite(f => !f);
+    } catch (e) {
+      console.error('toggle_favorite error:', e.response?.status, e.response?.data || e.message);
+    }
+    setFavoriteLoading(false);
+  };
+
   if (!place) return null;
   const properties = place.properties || {};
   return (
@@ -284,12 +304,30 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
             </ul>
           )}
         </div>
+        {isLoggedIn && (
+          <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={handleToggleFavorite} disabled={favoriteLoading} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}>
+              <StarIcon filled={isFavorite} />
+            </button>
+            <span style={{ fontWeight: 500, color: isFavorite ? '#FFD600' : '#888', fontSize: 15 }}>
+              {isFavorite ? 'В избранном!' : 'Добавь в избранное!'}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
+// 1. Импорт иконки звезды (SVG)
+const StarIcon = ({ filled, ...props }) => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill={filled ? '#FFD600' : 'none'} stroke="#FFD600" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
 function HomePage() {
+  const { authToken } = useAuth();
   const [places, setPlaces] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -304,6 +342,7 @@ function HomePage() {
   const [formMessage, setFormMessage] = useState('');
   const [showModerationAlert, setShowModerationAlert] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState(null);
+  const [addToFavorite, setAddToFavorite] = useState(false);
 
   const kazanCoordinates = [55.7961, 49.1064];
   const initialZoom = 15;
@@ -392,8 +431,7 @@ function HomePage() {
     e.preventDefault();
     setFormMessage('Сохранение места...');
 
-    const token = localStorage.getItem('authToken');
-    if (!token) {
+    if (!authToken) {
       setFormMessage('Ошибка: Необходимо авторизоваться.');
       return;
     }
@@ -419,7 +457,7 @@ function HomePage() {
 
     try {
       const headers = {
-        Authorization: `Token ${token}`,
+        Authorization: `Token ${authToken}`,
       };
       const response = await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/places/`, formData, { headers });
 
@@ -428,7 +466,8 @@ function HomePage() {
         setNewPlaceCoordinates(null);
         setNewPlaceData({ name: '', description: '', categories: '', image: null });
         fetchPlaces();
-        setShowModerationAlert(true); // Показываем уведомление
+        setShowModerationAlert(true);
+        setAddToFavorite(false);
       } else {
         throw new Error('Неожиданный ответ сервера');
       }

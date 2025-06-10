@@ -67,6 +67,8 @@ class PlaceSerializer(GeoFeatureModelSerializer):
     owner = UserSerializer(read_only=True)
     image = serializers.SerializerMethodField()
     rejection_reason = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    is_favorite = serializers.SerializerMethodField()
+    favorites_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Place
@@ -74,10 +76,11 @@ class PlaceSerializer(GeoFeatureModelSerializer):
         fields = [
             "id", "name", "description", "location", "categories", "status",
             "created_at", "updated_at", "image", "distance",
-            "notes_count", "current_user_note", "owner", "rejection_reason"
+            "notes_count", "current_user_note", "owner", "rejection_reason",
+            "is_favorite", "favorites_count"
         ]
         read_only_fields = [
-            'created_at', 'updated_at', 'status', 'notes_count', 'current_user_note'
+            'created_at', 'updated_at', 'status', 'notes_count', 'current_user_note', 'is_favorite', 'favorites_count'
         ]
 
     # to_internal_value остается таким же, чтобы парсить входящие строки 'geometry' и 'properties'
@@ -170,3 +173,12 @@ class PlaceSerializer(GeoFeatureModelSerializer):
                 return request.build_absolute_uri(url)
             return url
         return None
+
+    def get_is_favorite(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.favorites.filter(id=request.user.id).exists()
+        return False
+
+    def get_favorites_count(self, obj):
+        return obj.favorites.count()
