@@ -45,16 +45,6 @@ class Place(models.Model):
         blank=True,
         verbose_name="Избранные пользователи"
     )
-    average_rating = models.DecimalField(
-        max_digits=3,
-        decimal_places=2,
-        default=0.0,
-        verbose_name="Средний рейтинг"
-    )
-    rating_count = models.IntegerField(
-        default=0,
-        verbose_name="Количество оценок"
-    )
     rejection_reason = models.TextField(blank=True, null=True, verbose_name="Причина отклонения")
 
     class Meta:
@@ -93,12 +83,6 @@ class UserNote(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
-    rating = models.IntegerField(
-        null=True,
-        blank=True,
-        validators=[MinValueValidator(1), MaxValueValidator(5)],
-        verbose_name="Оценка места"
-    )
     image = models.ImageField(
         upload_to='note_images/',
         blank=True,
@@ -110,7 +94,6 @@ class UserNote(models.Model):
     class Meta:
         verbose_name = "Заметка пользователя"
         verbose_name_plural = "Заметки пользователей"
-        unique_together = ('place', 'user')
 
     def __str__(self):
         return f"Заметка {self.user.username} о {self.place.name}"
@@ -122,7 +105,7 @@ class UserNote(models.Model):
 
 class Comment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Пользователь", db_index=True)
-    note = models.ForeignKey(UserNote, on_delete=models.CASCADE, related_name='comments', verbose_name="Заметка", db_index=True)
+    place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name='comments', verbose_name="Место", db_index=True)
     text = models.TextField(verbose_name="Текст комментария")
     moderation_status = models.CharField(
         max_length=50,
@@ -141,8 +124,7 @@ class Comment(models.Model):
         ordering = ['created_at']
 
     def __str__(self):
-        return f"Комментарий от {self.user.username} к заметке {self.note.id}"
+        return f"Комментарий от {self.user.username} к месту {self.place.name}"
 
-    # Ensure moderation status can be updated
     def can_moderate(self, user):
         return user.is_superuser or user.groups.filter(name='Moderators').exists()

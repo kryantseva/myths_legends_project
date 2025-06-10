@@ -17,6 +17,14 @@ function ProfilePage() {
   const [moderationNotes, setModerationNotes] = useState([]);
   const [moderationComments, setModerationComments] = useState([]);
   const [userComments, setUserComments] = useState([]);
+  const [allPlacesById, setAllPlacesById] = useState({});
+
+  // Функция для извлечения id места из заметки или комментария
+  function extractPlaceId(item) {
+    if (!item) return null;
+    if (typeof item.place === 'object' && item.place !== null) return item.place.id;
+    return item.place_id || item.place;
+  }
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -27,16 +35,13 @@ function ProfilePage() {
       console.log('Current user not loaded yet, waiting...');
       return;
     }
-
     const fetchUserData = async () => {
       try {
         const headers = { Authorization: `Token ${localStorage.getItem('authToken')}` };
-
         // Места пользователя (approved)
         const placesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/?owner=${currentUser.id}&status=approved`, { headers });
         const placesData = placesResponse.data.features || placesResponse.data.results || placesResponse.data;
         setUserPlaces(Array.isArray(placesData) ? placesData : []);
-
         // Места пользователя на модерации (pending)
         const moderationPlacesPendingResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/?owner=${currentUser.id}&status=pending`, { headers });
         const moderationPlacesPendingData = moderationPlacesPendingResponse.data.features || moderationPlacesPendingResponse.data.results || moderationPlacesPendingResponse.data;
@@ -47,12 +52,10 @@ function ProfilePage() {
           ...(Array.isArray(moderationPlacesPendingData) ? moderationPlacesPendingData : []),
           ...(Array.isArray(moderationPlacesRejectedData) ? moderationPlacesRejectedData : [])
         ]);
-
-        // Заметки пользователя (approved)
-        const notesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?user=${currentUser.id}&moderation_status=approved`, { headers });
+        // Заметки (approved, все пользователи)
+        const notesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?moderation_status=approved&page_size=1000`, { headers });
         const notesData = notesResponse.data.results || notesResponse.data;
         setUserNotes(Array.isArray(notesData) ? notesData : []);
-
         // Заметки пользователя на модерации (pending)
         const moderationNotesPendingResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?user=${currentUser.id}&moderation_status=pending`, { headers });
         const moderationNotesPendingData = moderationNotesPendingResponse.data.results || moderationNotesPendingResponse.data;
@@ -63,7 +66,10 @@ function ProfilePage() {
           ...(Array.isArray(moderationNotesPendingData) ? moderationNotesPendingData : []),
           ...(Array.isArray(moderationNotesRejectedData) ? moderationNotesRejectedData : [])
         ]);
-
+        // Комментарии (approved, все пользователи)
+        const commentsResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?moderation_status=approved&page_size=1000`, { headers });
+        const commentsData = commentsResponse.data.results || commentsResponse.data;
+        setUserComments(Array.isArray(commentsData) ? commentsData : []);
         // Комментарии пользователя на модерации (pending)
         const moderationCommentsPendingResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?user=${currentUser.id}&moderation_status=pending`, { headers });
         const moderationCommentsPendingData = moderationCommentsPendingResponse.data.results || moderationCommentsPendingResponse.data;
@@ -74,12 +80,27 @@ function ProfilePage() {
           ...(Array.isArray(moderationCommentsPendingData) ? moderationCommentsPendingData : []),
           ...(Array.isArray(moderationCommentsRejectedData) ? moderationCommentsRejectedData : [])
         ]);
-
-        // Комментарии пользователя (approved)
-        const commentsResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?user=${currentUser.id}&moderation_status=approved`, { headers });
-        const commentsData = commentsResponse.data.results || commentsResponse.data;
-        setUserComments(Array.isArray(commentsData) ? commentsData : []);
-
+        // --- Подгружаем названия всех мест, к которым есть заметки и комментарии ---
+        // Собираем уникальные placeId из заметок и комментариев
+        const notePlaceIds = (Array.isArray(notesData) ? notesData : []).map(extractPlaceId).filter(Boolean);
+        const commentPlaceIds = (Array.isArray(commentsData) ? commentsData : []).map(extractPlaceId).filter(Boolean);
+        const allPlaceIds = Array.from(new Set([...notePlaceIds, ...commentPlaceIds]));
+        // Получаем все эти места одним запросом (если есть хотя бы один id)
+        let placesById = {};
+        if (allPlaceIds.length > 0) {
+          const placesByIdResp = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/?id__in=${allPlaceIds.join(',')}&page_size=1000`, { headers });
+          const placesArr = placesByIdResp.data.features || placesByIdResp.data.results || placesByIdResp.data;
+          (Array.isArray(placesArr) ? placesArr : []).forEach(p => {
+            const name = p.properties?.name || p.name;
+            if (name) placesById[p.id] = name;
+          });
+        }
+        // Диагностика
+        console.log('notePlaceIds', notePlaceIds);
+        console.log('commentPlaceIds', commentPlaceIds);
+        console.log('allPlaceIds', allPlaceIds);
+        console.log('placesById', placesById);
+        setAllPlacesById(placesById);
         // Избранные места
         const favoritesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/`, { headers });
         const allPlaces = favoritesResponse.data.features || favoritesResponse.data.results || favoritesResponse.data;
@@ -87,7 +108,6 @@ function ProfilePage() {
           place.favorites && place.favorites.some(fav => fav === currentUser.id)
         );
         setFavoritePlaces(userFavorites);
-
         setLoading(false);
       } catch (err) {
         console.error('Error fetching user data:', err.response?.data || err.message);
@@ -95,12 +115,12 @@ function ProfilePage() {
         setLoading(false);
       }
     };
-
     fetchUserData();
   }, [isLoggedIn, currentUser, navigate]);
 
   const handleLogout = async () => {
     await logout();
+    window.location.reload();
   };
 
   if (loading) return <div style={{ textAlign: 'center', padding: '20px' }}>Загрузка...</div>;
@@ -124,47 +144,76 @@ function ProfilePage() {
       </div>
 
       <div className="profile-section">
-        <h3>Ваши места ({userPlaces.length})</h3>
+        <h3>Ваши места</h3>
         {userPlaces.length > 0 ? (
           <ul>
             {userPlaces.map(place => (
               <li key={place.id}>
-                {place.properties?.name || place.name} (Статус: {place.properties?.status || place.status})
+                {place.properties?.name || place.name}
+                <span style={{ color: '#888', marginLeft: 8 }}>
+                  {place.properties?.created_at || place.created_at ? new Date(place.properties?.created_at || place.created_at).toLocaleString() : ''}
+                </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p>Вы еще не добавили ни одного места.</p>
+          <p>Нет добавленных мест.</p>
         )}
       </div>
 
       <div className="profile-section">
-        <h3>Ваши заметки ({userNotes.length})</h3>
+        <h3>Заметки</h3>
         {userNotes.length > 0 ? (
           <ul>
-            {userNotes.map(note => (
-              <li key={note.id}>
-                {note.text} (Место: {note.place?.name || 'Неизвестно'}, Статус: {note.moderation_status})
-              </li>
-            ))}
+            {userNotes.map(note => {
+              let placeName = '';
+              const placeId = extractPlaceId(note);
+              if (placeId && allPlacesById[placeId]) {
+                placeName = allPlacesById[placeId];
+              }
+              return (
+                <li key={note.id}>
+                  {note.text}
+                  {placeName && (
+                    <> (Место: {placeName})</>
+                  )}
+                  <span style={{ color: '#888', marginLeft: 8 }}>
+                    {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <p>Вы еще не оставили ни одной заметки.</p>
+          <p>Нет одобренных заметок.</p>
         )}
       </div>
 
       <div className="profile-section">
-        <h3>Ваши комментарии ({userComments.length})</h3>
+        <h3>Комментарии</h3>
         {userComments.length > 0 ? (
           <ul>
-            {userComments.map(comment => (
-              <li key={comment.id}>
-                {comment.text} (Статус: {comment.moderation_status})
-              </li>
-            ))}
+            {userComments.map(comment => {
+              let placeName = '';
+              const placeId = extractPlaceId(comment);
+              if (placeId && allPlacesById[placeId]) {
+                placeName = allPlacesById[placeId];
+              }
+              return (
+                <li key={comment.id}>
+                  {comment.text}
+                  {placeName && (
+                    <> (Место: {placeName})</>
+                  )}
+                  <span style={{ color: '#888', marginLeft: 8 }}>
+                    {comment.created_at ? new Date(comment.created_at).toLocaleString() : ''}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <p>Вы еще не оставили ни одного комментария.</p>
+          <p>Нет одобренных комментариев.</p>
         )}
       </div>
 

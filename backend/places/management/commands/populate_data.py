@@ -117,6 +117,13 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(self.style.WARNING(f'Place "{place.name}" already exists. (Status: {place.status}, Owner: {place.owner.username})'))
 
+        # Очищаем битые заметки и комментарии после создания мест, но до создания новых заметок и комментариев
+        UserNote.objects.filter(place__isnull=True).delete()
+        Comment.objects.filter(place__isnull=True).delete()
+
+        # Оставляем только approved места для заметок и комментариев
+        approved_places = [p for p in created_places if getattr(p, 'status', None) == 'approved']
+
         self.stdout.write(self.style.MIGRATE_HEADING('Creating legendary notes for places...'))
         note_texts = [
                     "Легенда гласит, что здесь обитал дух древнего воина, охраняющий свои сокровища. Говорят, его меч светился в полнолуние. Сказители передают эту историю из поколения в поколение.",
@@ -152,28 +159,23 @@ class Command(BaseCommand):
         ]
         while note_count < 50:  # Exactly 50 notes
             user = random.choice(regular_users)
-            place = random.choice(created_places)
+            place = random.choice(approved_places)
             user_place_key = (place.id, user.id)
             if user_place_key not in existing_notes:
                 status = 'approved' if random.random() < 0.5 else 'pending'  # 50/50
                 if random.random() < 0.05:  # 5% rejected
                     status = 'rejected'
-                
-                rating = random.randint(1, 5) if random.random() < 0.8 else None
-                
                 note_image = self._create_dummy_image(
                     width=random.randint(200, 500),
                     height=random.randint(150, 400),
                     color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)),
                     text=f"Legend {place.id}"
                 ) if random.random() < 0.4 else None
-                
                 note = UserNote.objects.create(
                     user=user,
                     place=place,
                     text=random.choice(note_texts),
                     moderation_status=status,
-                    rating=rating,
                     image=note_image
                 )
                 if status == 'rejected':
@@ -181,11 +183,11 @@ class Command(BaseCommand):
                     note.save()
                 existing_notes.add(user_place_key)
                 note_count += 1
-                self.stdout.write(self.style.SUCCESS(f'  Created note for {user.username} about {place.name} (Status: {status}, Rating: {rating})'))
-            if len(existing_notes) >= len(regular_users) * len(created_places):
+                self.stdout.write(self.style.SUCCESS(f'  Created note for {user.username} about {place.name} (Status: {status})'))
+            if len(existing_notes) >= len(regular_users) * len(approved_places):
                 break
 
-        self.stdout.write(self.style.MIGRATE_HEADING('Creating anecdotal comments for notes...'))
+        self.stdout.write(self.style.MIGRATE_HEADING('Creating anecdotal comments for places...'))
         comment_texts = [
                     "Блин, мне бабушка такое рассказывала про воинов! Класс!",
                     "Ого, моя мама упоминала фею под луной. Это реально круто!",
@@ -208,19 +210,17 @@ class Command(BaseCommand):
                     "Прадед говорил про золотую птицу. Легенда!",
                     "Мама шептала о храме звёзд. Потрясающе!"
                 ]
-
         comment_count = 0
         while comment_count < 50:  # Exactly 50 comments
-            note = random.choice(UserNote.objects.all())
+            place = random.choice(approved_places)
             user = random.choice(regular_users)
             status = 'approved' if random.random() < 0.5 else 'pending'  # 50/50
             if random.random() < 0.05:  # 5% rejected
                 status = 'rejected'
-            
             try:
                 comment = Comment.objects.create(
                     user=user,
-                    note=note,
+                    place=place,
                     text=random.choice(comment_texts),
                     moderation_status=status
                 )
@@ -228,9 +228,9 @@ class Command(BaseCommand):
                     comment.rejection_reason = random.choice(rejection_reasons)
                     comment.save()
                 comment_count += 1
-                self.stdout.write(self.style.SUCCESS(f'  Created comment by {user.username} for note about {note.place.name} (Status: {status})'))
+                self.stdout.write(self.style.SUCCESS(f'  Created comment by {user.username} for place {place.name} (Status: {status})'))
             except Exception as e:
-                self.stdout.write(self.style.ERROR(f'  Failed to create comment for note about {note.place.name} by {user.username}: {e}'))
+                self.stdout.write(self.style.ERROR(f'  Failed to create comment for place {place.name} by {user.username}: {e}'))
 
         self.stdout.write(self.style.SUCCESS('Database population complete!'))
 

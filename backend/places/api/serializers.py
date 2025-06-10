@@ -30,11 +30,11 @@ class UserNoteSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='user.username', read_only=True)
     user = UserSerializer(read_only=True) # Пользователь только для чтения, заполняется на бэкенде
     rejection_reason = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    image = serializers.SerializerMethodField()
+    image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = UserNote
-        fields = ['id', 'place', 'user', 'author_username', 'text', 'rating', 'image', 'moderation_status', 'created_at', 'updated_at', 'rejection_reason']
+        fields = ['id', 'place', 'user', 'author_username', 'text', 'image', 'moderation_status', 'created_at', 'updated_at', 'rejection_reason']
         read_only_fields = ['user', 'moderation_status', 'created_at', 'updated_at'] # Поля только для чтения
 
     def get_image(self, obj):
@@ -52,18 +52,17 @@ class CommentSerializer(serializers.ModelSerializer):
     включающий имя автора и вложенный сериализатор пользователя.
     """
     author_username = serializers.CharField(source='user.username', read_only=True)
-    user = UserSerializer(read_only=True) # Пользователь только для чтения
+    user = UserSerializer(read_only=True)
     rejection_reason = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = Comment
-        fields = ['id', 'note', 'user', 'author_username', 'text', 'moderation_status', 'created_at', 'updated_at', 'rejection_reason']
-        read_only_fields = ['user', 'moderation_status', 'created_at', 'updated_at'] # Поля только для чтения
+        fields = ['id', 'place', 'user', 'author_username', 'text', 'moderation_status', 'created_at', 'updated_at', 'rejection_reason']
+        read_only_fields = ['user', 'moderation_status', 'created_at', 'updated_at']
 
 class PlaceSerializer(GeoFeatureModelSerializer):
     distance = serializers.SerializerMethodField()
     notes_count = serializers.SerializerMethodField()
-    avg_rating = serializers.SerializerMethodField()
     current_user_note = serializers.SerializerMethodField()
     owner = UserSerializer(read_only=True)
     image = serializers.SerializerMethodField()
@@ -75,10 +74,10 @@ class PlaceSerializer(GeoFeatureModelSerializer):
         fields = [
             "id", "name", "description", "location", "categories", "status",
             "created_at", "updated_at", "image", "distance",
-            "notes_count", "avg_rating", "current_user_note", "owner", "rejection_reason"
+            "notes_count", "current_user_note", "owner", "rejection_reason"
         ]
         read_only_fields = [
-            'created_at', 'updated_at', 'status', 'notes_count', 'avg_rating', 'current_user_note'
+            'created_at', 'updated_at', 'status', 'notes_count', 'current_user_note'
         ]
 
     # to_internal_value остается таким же, чтобы парсить входящие строки 'geometry' и 'properties'
@@ -153,27 +152,15 @@ class PlaceSerializer(GeoFeatureModelSerializer):
         """
         return obj.user_notes.filter(moderation_status='approved').count()
 
-    def get_avg_rating(self, obj):
-        """
-        Возвращает средний рейтинг для данного места, основанный на одобренных заметках.
-        """
-        avg = obj.user_notes.filter(moderation_status='approved', rating__isnull=False).aggregate(Avg('rating'))['rating__avg']
-        return round(avg, 1) if avg else None # Округляем до 1 знака после запятой
-
     def get_current_user_note(self, obj):
         """
-        Возвращает заметку текущего авторизованного пользователя для данного места, если она существует.
+        Возвращает список заметок текущего авторизованного пользователя для данного места.
         """
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            try:
-                # Пытаемся найти заметку текущего пользователя для этого места
-                note = obj.user_notes.get(user=request.user)
-                # Сериализуем найденную заметку
-                return UserNoteSerializer(note, context={'request': request}).data
-            except UserNote.DoesNotExist:
-                return None # Если заметки нет, возвращаем None
-        return None # Если пользователь не авторизован, возвращаем None
+            notes = obj.user_notes.filter(user=request.user)
+            return UserNoteSerializer(notes, many=True, context={'request': request}).data
+        return []
 
     def get_image(self, obj):
         request = self.context.get('request')

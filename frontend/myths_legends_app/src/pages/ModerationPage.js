@@ -24,12 +24,10 @@ function ModerationPage() {
         axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?moderation_status=pending`, { headers }),
         axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?moderation_status=pending`, { headers }),
       ]);
-
       const places = placesResponse.data.features || placesResponse.data.results || [];
       const notes = notesResponse.data.results || notesResponse.data || [];
       const comments = commentsResponse.data.results || commentsResponse.data || [];
-
-      setPendingItems([
+      const allItems = [
         ...places.map(item => ({
           ...item,
           type: 'place',
@@ -63,7 +61,10 @@ function ModerationPage() {
           },
           created_at: item.created_at || 'N/A'
         })),
-      ]);
+      ];
+      // Сортировка по created_at по убыванию (свежие сверху)
+      allItems.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setPendingItems(allItems);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching pending items:', err.response?.data || err.message);
@@ -111,31 +112,26 @@ function ModerationPage() {
   const openPopup = async (item) => {
     setLoadingPopupData(true);
     setPopupError(null);
-    let fullItem = { ...item }; // Start with the basic item
-    const headers = { Authorization: `Token ${localStorage.getItem('authToken')}` };
-
+    let fullItem = { ...item };
     try {
       if (item.type === 'note') {
-        if (item.place) { // Assuming 'place' field holds ID
-          const placeResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/${item.place}/`, { headers });
-          fullItem.place_details = placeResponse.data; // Store full place object
+        const noteResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/${item.id}/`);
+        fullItem.note_details = noteResponse.data;
+        if (noteResponse.data.place) {
+          const placeResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/${noteResponse.data.place}/`);
+          fullItem.place_details = placeResponse.data;
         }
       } else if (item.type === 'comment') {
-        if (item.note) { // Assuming 'note' field holds ID
-          const noteResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/${item.note}/`, { headers });
-          fullItem.note_details = noteResponse.data; // Store full note object
-          // Also fetch place details if available from the note
-          if (fullItem.note_details.place) {
-            const placeResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/${fullItem.note_details.place}/`, { headers });
-            fullItem.place_details = placeResponse.data; // Store full place object
-          }
+        if (item.place) {
+          const placeResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/${item.place}/`);
+          fullItem.place_details = placeResponse.data;
         }
       }
       setSelectedItem(fullItem);
     } catch (err) {
       console.error('Error fetching popup details:', err.response?.data || err.message);
       setPopupError('Не удалось загрузить подробности. Ошибка: ' + (err.response?.statusText || err.message));
-      setSelectedItem(null); // Clear selected item if error
+      setSelectedItem(null);
     } finally {
       setLoadingPopupData(false);
     }
@@ -272,17 +268,11 @@ function ModerationPage() {
                 {/* Подробности для Комментария */}
                 {selectedItem.type === 'comment' && (
                   <>
-                    {selectedItem.note_details && (
-                      <>
-                        {selectedItem.place_details && (
-                          <p><strong>Место:</strong> {selectedItem.place_details.properties?.name || selectedItem.place_details.name}</p>
-                        )}
-                        <p><strong>Текст заметки:</strong> {selectedItem.note_details.text}</p>
-                        <p><strong>Автор заметки:</strong> {selectedItem.note_details.user?.username || 'Неизвестно'}</p>
-                      </>
+                    {selectedItem.place_details && (
+                      <p><strong>Место:</strong> {selectedItem.place_details.properties?.name || selectedItem.place_details.name}</p>
                     )}
-                    {/* Исправлено: Отображаем текст комментария из selectedItem.text */}
                     <p><strong>Текст комментария:</strong> {selectedItem.text}</p>
+                    <p><strong>Дата:</strong> {selectedItem.created_at ? new Date(selectedItem.created_at).toLocaleString() : ''}</p>
                   </>
                 )}
               </>

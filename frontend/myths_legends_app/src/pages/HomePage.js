@@ -8,6 +8,7 @@ import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
+import { useAuth } from '../components/AuthContext';
 
 // Исправление для иконок Leaflet по умолчанию
 delete L.Icon.Default.prototype._getIconUrl;
@@ -99,6 +100,172 @@ function MapButtons({ onLocateMe, onAddPlaceModeToggle, isAddingPlaceMode, isAut
   );
 }
 
+function PlaceInfoModal({ place, onClose }) {
+  const { currentUser, isLoggedIn, authToken } = useAuth();
+  const [notes, setNotes] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [formType, setFormType] = useState('note'); // note или comment
+  const [noteForm, setNoteForm] = useState({ text: '', image: null });
+  const [commentForm, setCommentForm] = useState({ text: '' });
+  const [formMsg, setFormMsg] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  useEffect(() => {
+    if (!place) return;
+    const fetchNotesAndComments = async () => {
+      try {
+        const notesResp = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?place=${place.id}&moderation_status=approved&page_size=1000`);
+        const notesArr = Array.isArray(notesResp.data.results) ? notesResp.data.results : notesResp.data;
+        setNotes(notesArr);
+        const commentsResp = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?place=${place.id}&moderation_status=approved&page_size=1000`);
+        const commentsArr = Array.isArray(commentsResp.data.results) ? commentsResp.data.results : commentsResp.data;
+        setComments(commentsArr);
+      } catch (e) {
+        setNotes([]);
+        setComments([]);
+      }
+    };
+    fetchNotesAndComments();
+  }, [place]);
+  const handleNoteFormChange = (e) => {
+    const { name, value, files } = e.target;
+    if (name === 'image') setNoteForm(f => ({ ...f, image: files[0] }));
+    else setNoteForm(f => ({ ...f, [name]: value }));
+  };
+  const handleCommentFormChange = (e) => {
+    const { name, value } = e.target;
+    setCommentForm(f => ({ ...f, [name]: value }));
+  };
+  const handleFormSubmit = async (e) => {
+    e.preventDefault();
+    if (!isLoggedIn) { setFormMsg('Требуется вход'); return; }
+    if (formType === 'note') {
+      if (!noteForm.text.trim()) { setFormMsg('Введите текст заметки'); return; }
+      setFormLoading(true); setFormMsg('Отправка...');
+      try {
+        const formData = new FormData();
+        formData.append('place', place.id);
+        formData.append('text', noteForm.text);
+        if (noteForm.image) formData.append('image', noteForm.image);
+        await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/notes/`, formData, {
+          headers: { Authorization: `Token ${authToken}` }
+        });
+        setNoteForm({ text: '', image: null });
+        setFormMsg('');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      } catch (err) {
+        setFormMsg('Ошибка при отправке');
+      } finally {
+        setFormLoading(false);
+      }
+    } else if (formType === 'comment') {
+      if (!commentForm.text.trim()) { setFormMsg('Введите текст комментария'); return; }
+      setFormLoading(true); setFormMsg('Отправка...');
+      try {
+        await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/comments/`, {
+          place: place.id,
+          text: commentForm.text
+        }, {
+          headers: { Authorization: `Token ${authToken}` }
+        });
+        setCommentForm({ text: '' });
+        setFormMsg('');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      } catch (err) {
+        setFormMsg('Ошибка при отправке');
+      } finally {
+        setFormLoading(false);
+      }
+    }
+  };
+  if (!place) return null;
+  const properties = place.properties || {};
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: 10, padding: 24, minWidth: 350, maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', fontSize: 24, cursor: 'pointer' }}>×</button>
+        <h2>{properties.name}</h2>
+        <p><strong>Описание:</strong> {properties.description}</p>
+        <p><strong>Категории:</strong> {properties.categories}</p>
+        {properties.image && <img src={properties.image} alt={properties.name} style={{ maxWidth: '100%', margin: '10px 0' }} />}
+        {isLoggedIn && (
+          <form onSubmit={handleFormSubmit} style={{ marginTop: 20 }}>
+            <div style={{ marginBottom: 10 }}>
+              <label htmlFor="formType">Что вы хотите добавить? </label>
+              <select id="formType" value={formType} onChange={e => { setFormType(e.target.value); setFormMsg(''); }}>
+                <option value="note">Заметка</option>
+                <option value="comment">Комментарий</option>
+              </select>
+            </div>
+            {formType === 'note' ? (
+              <>
+                <h3>Добавить заметку</h3>
+                <textarea
+                  name="text"
+                  value={noteForm.text}
+                  onChange={handleNoteFormChange}
+                  placeholder="Текст заметки"
+                  rows={4}
+                  style={{ width: '100%' }}
+                />
+                <div style={{ margin: '10px 0' }}>
+                  Картинка: <input type="file" name="image" accept="image/*" onChange={handleNoteFormChange} />
+                </div>
+              </>
+            ) : (
+              <>
+                <h3>Добавить комментарий</h3>
+                <textarea
+                  name="text"
+                  value={commentForm.text}
+                  onChange={handleCommentFormChange}
+                  placeholder="Текст комментария"
+                  rows={3}
+                  style={{ width: '100%' }}
+                />
+              </>
+            )}
+            <button type="submit" disabled={formLoading} style={{ width: '100%', padding: 8, background: '#eee', border: 'none', fontSize: 18 }}>
+              {formLoading ? 'Отправка...' : 'Добавить'}
+            </button>
+            {formMsg && <div style={{ color: formMsg.startsWith('Ошибка') ? 'red' : 'orange', marginTop: 8 }}>{formMsg}</div>}
+          </form>
+        )}
+        {showToast && (
+          <div style={{ position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)', background: '#4caf50', color: 'white', padding: '12px 24px', borderRadius: 8, zIndex: 9999, fontSize: 18 }}>
+            {formType === 'note' ? 'Заметка' : 'Комментарий'} отправлен на модерацию!
+          </div>
+        )}
+        <div style={{ marginTop: 20 }}>
+          <h4>Заметки</h4>
+          {notes.length === 0 ? <p>Нет заметок</p> : (
+            <ul>
+              {notes.map(note => (
+                <li key={note.id}>
+                  <b>{note.text}</b>
+                  {note.image && <img src={note.image} alt="note" style={{ maxWidth: 60, marginLeft: 8 }} />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div style={{ marginTop: 20 }}>
+          <h4>Комментарии</h4>
+          {comments.length === 0 ? <p>Нет комментариев</p> : (
+            <ul>
+              {comments.map(comment => (
+                <li key={comment.id}>{comment.text}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HomePage() {
   const [places, setPlaces] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
@@ -113,6 +280,7 @@ function HomePage() {
   });
   const [formMessage, setFormMessage] = useState('');
   const [showModerationAlert, setShowModerationAlert] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState(null);
 
   const kazanCoordinates = [55.7961, 49.1064];
   const initialZoom = 15;
@@ -300,31 +468,15 @@ function HomePage() {
             console.warn("Пропускаем место из-за отсутствующих или некорректных координат:", place);
             return null;
           }
-          const distanceInfo = place.properties.distance !== null && place.properties.distance !== undefined
-            ? `<br/>Расстояние: ${place.properties.distance.toFixed()} метров`
-            : '';
           return (
             <Marker
               position={[coords.latitude, coords.longitude]}
               icon={customMarkerIcon}
               key={place.id || place.properties.id}
-            >
-              <Popup>
-                <b>{place.properties.name}</b><br />
-                {place.properties.description}
-                {distanceInfo}
-                {place.properties.image && (
-                  <img
-                    src={place.properties.image}
-                    alt={place.properties.name}
-                    style={{ maxWidth: '100px', maxHeight: '100px', marginTop: '5px' }}
-                  />
-                )}
-                <p>Категории: {place.properties.categories}</p>
-                <p>Рейтинг: {place.properties.avg_rating ? place.properties.avg_rating.toFixed(1) : 'Нет'}</p>
-                <p>Заметок: {place.properties.notes_count}</p>
-              </Popup>
-            </Marker>
+              eventHandlers={{
+                click: () => setSelectedPlace(place)
+              }}
+            />
           );
         })}
       </MapContainer>
@@ -436,6 +588,9 @@ function HomePage() {
           </button>
         </div>
       )}
+
+      {/* Модальное окно информации о месте */}
+      <PlaceInfoModal place={selectedPlace} onClose={() => setSelectedPlace(null)} />
     </div>
   );
 }

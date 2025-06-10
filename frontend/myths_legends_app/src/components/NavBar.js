@@ -9,6 +9,7 @@ function NavBar() {
 
   const handleLogout = async () => {
     await logout();
+    window.location.reload();
   };
 
   return (
