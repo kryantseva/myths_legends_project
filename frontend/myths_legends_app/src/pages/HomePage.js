@@ -326,9 +326,38 @@ const StarIcon = ({ filled, ...props }) => (
   </svg>
 );
 
+function extractCategories(places) {
+  const set = new Set();
+  places.forEach(place => {
+    const cats = (place.properties?.categories || place.categories || "").split(',').map(c => c.trim()).filter(Boolean);
+    cats.forEach(c => set.add(c));
+  });
+  return Array.from(set).sort();
+}
+
+// --- ДОБАВЛЯЮ ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ДЛЯ ЧИПОВ ---
+function Chip({ label, onDelete }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', background: '#e0e0e0', borderRadius: 16, padding: '2px 10px', marginRight: 6, fontSize: 14
+    }}>
+      {label}
+      {onDelete && <span onClick={onDelete} style={{ marginLeft: 6, cursor: 'pointer', color: '#888', fontWeight: 700 }}>&times;</span>}
+    </span>
+  );
+}
+
 function HomePage() {
   const { authToken } = useAuth();
   const [places, setPlaces] = useState([]);
+  const [filteredPlaces, setFilteredPlaces] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [searchValue, setSearchValue] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [nearMe, setNearMe] = useState(false);
+  const [radius, setRadius] = useState(10);
   const [userLocation, setUserLocation] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isAddingPlaceMode, setIsAddingPlaceMode] = useState(false);
@@ -343,6 +372,7 @@ function HomePage() {
   const [showModerationAlert, setShowModerationAlert] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [addToFavorite, setAddToFavorite] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const kazanCoordinates = [55.7961, 49.1064];
   const initialZoom = 15;
@@ -493,8 +523,178 @@ function HomePage() {
     setShowModerationAlert(false);
   };
 
+  // Сбор всех категорий при загрузке мест
+  useEffect(() => {
+    setAllCategories(extractCategories(places));
+  }, [places]);
+
+  // --- МУЛЬТИВЫБОР КАТЕГОРИЙ, ОТОБРАЖЕНИЕ ЧИПОВ ---
+  const handleCategoryToggle = cat => {
+    setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
+    setNearMe(false);
+    setShowSearch(false);
+    setSearchResults([]);
+  };
+  const handleClearCategories = () => setSelectedCategories([]);
+
+  // --- handleNearMeToggle теперь не сбрасывает категории ---
+  const handleNearMeToggle = useCallback((checked) => {
+    setNearMe(checked);
+    setShowSearch(false);
+    setSearchResults([]);
+    if (checked) {
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setUserLocation({ lat: latitude, lng: longitude });
+          },
+          (error) => {
+            alert("Не удалось определить вашу геолокацию. Возможно, вы запретили доступ или функция недоступна.");
+            setNearMe(false);
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      } else {
+        alert("Ваш браузер не поддерживает геолокацию.");
+        setNearMe(false);
+      }
+    } else {
+      setUserLocation(null);
+    }
+  }, []);
+
+  // --- ФИЛЬТРАЦИЯ: категории и радиус могут работать одновременно ---
+  useEffect(() => {
+    let filtered = places;
+    // Сначала фильтруем по категориям, если выбраны
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter(place => {
+        const cats = (place.properties?.categories || place.categories || "").split(',').map(c => c.trim());
+        return cats.some(cat => selectedCategories.includes(cat));
+      });
+    }
+    // Затем, если включён радиус и есть userLocation, ДОПОЛНИТЕЛЬНО фильтруем по расстоянию
+    if (nearMe && userLocation) {
+      filtered = filtered.filter(place => {
+        const coords = place.geometry ? parseWktPoint(place.geometry) : null;
+        if (!coords) return false;
+        const toRad = deg => deg * Math.PI / 180;
+        const R = 6371; // км
+        const dLat = toRad(coords.latitude - userLocation.lat);
+        const dLon = toRad(coords.longitude - userLocation.lng);
+        const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(userLocation.lat)) * Math.cos(toRad(coords.latitude)) * Math.sin(dLon/2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const dist = R * c;
+        return dist <= radius;
+      });
+    }
+    setFilteredPlaces(filtered);
+  }, [places, selectedCategories, nearMe, radius, userLocation]);
+
+  // --- ПОИСК ПО НАЗВАНИЮ И КАТЕГОРИЯМ ---
+  const handleSearch = () => {
+    if (!searchValue.trim()) return;
+    const val = searchValue.trim().toLowerCase();
+    const found = places.filter(place => {
+      const name = (place.properties?.name || place.name || "").toLowerCase();
+      const cats = (place.properties?.categories || place.categories || "").toLowerCase();
+      return name.includes(val) || cats.includes(val);
+    });
+    setSearchResults(found);
+    setShowSearch(true);
+  };
+  const handleReset = () => {
+    setSelectedCategories([]);
+    setNearMe(false);
+    setRadius(10);
+    setSearchValue("");
+    setSearchResults([]);
+    setShowSearch(false);
+    setFilteredPlaces(places);
+    setUserLocation(null);
+  };
+  const handleResetFilters = () => {
+    setSelectedCategories([]);
+    setNearMe(false);
+    setRadius(10);
+    setFilteredPlaces(places);
+    setUserLocation(null);
+  };
+
+  // --- UI ФИЛЬТРОВ ---
+  const renderFilters = () => (
+    <div style={{ background: '#f7f7f7', padding: 16, borderRadius: 8, marginBottom: 12, maxWidth: 900, margin: '0 auto', boxShadow: '0 2px 8px #0001' }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <input
+          type="text"
+          placeholder="Поиск по названию или категории..."
+          value={searchValue}
+          onChange={e => setSearchValue(e.target.value)}
+          style={{ padding: 6, borderRadius: 4, border: '1px solid #ccc', minWidth: 180 }}
+        />
+        <button onClick={handleSearch} style={{ padding: '6px 14px', borderRadius: 4, background: '#007bff', color: 'white', border: 'none' }}>Поиск</button>
+        <button onClick={handleReset} style={{ padding: '6px 14px', borderRadius: 4, background: '#e0e0e0', color: '#333', border: 'none' }}>Сбросить всё</button>
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div>
+          <b>Категории:</b>
+          {allCategories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => handleCategoryToggle(cat)}
+              style={{
+                marginLeft: 8, marginRight: 4, padding: '3px 10px', borderRadius: 12, border: selectedCategories.includes(cat) ? '2px solid #007bff' : '1px solid #ccc',
+                background: selectedCategories.includes(cat) ? '#e3f0ff' : '#fff', color: selectedCategories.includes(cat) ? '#007bff' : '#333', cursor: 'pointer', fontWeight: selectedCategories.includes(cat) ? 600 : 400
+              }}
+              disabled={nearMe}
+            >{cat}</button>
+          ))}
+          {selectedCategories.length > 0 && (
+            <button onClick={handleClearCategories} style={{ marginLeft: 10, color: '#d32f2f', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Снять все</button>
+          )}
+        </div>
+        <div style={{ marginLeft: 24 }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={nearMe}
+              onChange={e => handleNearMeToggle(e.target.checked)}
+              style={{ marginRight: 6 }}
+            />
+            Поближе ко мне
+          </label>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={radius}
+            onChange={e => setRadius(Number(e.target.value))}
+            disabled={!nearMe}
+            style={{ marginLeft: 10, verticalAlign: 'middle' }}
+          />
+          <span style={{ marginLeft: 6, color: nearMe ? '#007bff' : '#888' }}>{radius} км</span>
+        </div>
+        {(selectedCategories.length > 0 || nearMe) && (
+          <button onClick={handleResetFilters} style={{ marginLeft: 18, color: '#333', background: '#f0f0f0', border: '1px solid #bbb', borderRadius: 8, padding: '3px 12px', cursor: 'pointer' }}>Сбросить фильтры</button>
+        )}
+      </div>
+      <div style={{ marginTop: 8 }}>
+        {selectedCategories.map(cat => <Chip key={cat} label={cat} onDelete={() => handleCategoryToggle(cat)} />)}
+        {nearMe && <Chip label={`Поближе ко мне (${radius} км)`} onDelete={() => handleNearMeToggle(false)} />}
+      </div>
+    </div>
+  );
+
   return (
     <div className="main">
+      <button
+        onClick={() => setFiltersOpen(f => !f)}
+        style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 2001, background: '#007bff', color: 'white', border: 'none', borderRadius: 8, padding: '8px 24px', fontSize: 18, fontWeight: 600, boxShadow: '0 2px 8px #0002', cursor: 'pointer' }}
+      >
+        {filtersOpen ? 'Скрыть фильтры' : 'Фильтры'}
+      </button>
+      {filtersOpen && renderFilters()}
       <MapContainer
         center={kazanCoordinates}
         zoom={initialZoom}
@@ -505,6 +705,12 @@ function HomePage() {
           attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        {/* Отметка пользователя, если включён фильтр "Поближе ко мне" */}
+        {nearMe && userLocation && (
+          <Marker position={userLocation} icon={userLocationIcon}>
+            <Popup>Вы находитесь здесь!</Popup>
+          </Marker>
+        )}
         <LocationMarker position={userLocation} />
         <MapButtons
           onLocateMe={handleLocateMe}
@@ -521,23 +727,58 @@ function HomePage() {
             <Popup>Координаты нового места</Popup>
           </Marker>
         )}
-        {places.map(place => {
-          const coords = place.geometry ? parseWktPoint(place.geometry) : null;
-          if (!coords) {
-            console.warn("Пропускаем место из-за отсутствующих или некорректных координат:", place);
-            return null;
-          }
-          return (
-            <Marker
-              position={[coords.latitude, coords.longitude]}
-              icon={customMarkerIcon}
-              key={place.id || place.properties.id}
-              eventHandlers={{
-                click: () => setSelectedPlace(place)
-              }}
-            />
-          );
-        })}
+        {showSearch && searchResults.length > 0 ? (
+          searchResults.map(place => {
+            const coords = place.geometry ? parseWktPoint(place.geometry) : null;
+            if (!coords) return null;
+            return (
+              <Marker
+                position={[coords.latitude, coords.longitude]}
+                icon={customMarkerIcon}
+                key={place.id || place.properties.id}
+                eventHandlers={{
+                  click: () => setSelectedPlace(place)
+                }}
+              >
+                <Popup>
+                  <b>{place.properties?.name || place.name}</b><br/>
+                  <span style={{ color: '#888' }}>{place.properties?.categories || place.categories}</span><br/>
+                  {userLocation && (
+                    <span>Расстояние: {(() => {
+                      const toRad = deg => deg * Math.PI / 180;
+                      const R = 6371; // км
+                      const dLat = toRad(coords.latitude - userLocation.lat);
+                      const dLon = toRad(coords.longitude - userLocation.lng);
+                      const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(userLocation.lat)) * Math.cos(toRad(coords.latitude)) * Math.sin(dLon/2) ** 2;
+                      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                      const dist = R * c;
+                      return dist < 1 ? `${Math.round(dist*1000)} м` : `${dist.toFixed(2)} км`;
+                    })()}</span>
+                  )}
+                </Popup>
+              </Marker>
+            );
+          })
+        ) : showSearch && searchResults.length === 0 ? (
+          <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', color: '#d32f2f', fontWeight: 600, background: '#fff', padding: 16, borderRadius: 8, zIndex: 1000 }}>Ничего не найдено</div>
+        ) : filteredPlaces.length > 0 ? (
+          filteredPlaces.map(place => {
+            const coords = place.geometry ? parseWktPoint(place.geometry) : null;
+            if (!coords) return null;
+            return (
+              <Marker
+                position={[coords.latitude, coords.longitude]}
+                icon={customMarkerIcon}
+                key={place.id || place.properties.id}
+                eventHandlers={{
+                  click: () => setSelectedPlace(place)
+                }}
+              />
+            );
+          })
+        ) : (
+          <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', color: '#d32f2f', fontWeight: 600, background: '#fff', padding: 16, borderRadius: 8, zIndex: 1000 }}>Нет мест, соответствующих фильтру</div>
+        )}
       </MapContainer>
 
       {newPlaceCoordinates && isAuthenticated && (
