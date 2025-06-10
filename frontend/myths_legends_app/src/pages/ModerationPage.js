@@ -12,6 +12,65 @@ function ModerationPage() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [loadingPopupData, setLoadingPopupData] = useState(false);
   const [popupError, setPopupError] = useState(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectLoading, setRejectLoading] = useState(false);
+
+  const fetchPendingItems = async () => {
+    try {
+      const headers = { Authorization: `Token ${localStorage.getItem('authToken')}` };
+      const [placesResponse, notesResponse, commentsResponse] = await Promise.all([
+        axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/?moderation_status=pending`, { headers }),
+        axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?moderation_status=pending`, { headers }),
+        axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?moderation_status=pending`, { headers }),
+      ]);
+
+      const places = placesResponse.data.features || placesResponse.data.results || [];
+      const notes = notesResponse.data.results || notesResponse.data || [];
+      const comments = commentsResponse.data.results || commentsResponse.data || [];
+
+      setPendingItems([
+        ...places.map(item => ({
+          ...item,
+          type: 'place',
+          user: {
+            ...item.properties?.owner,
+            username: item.properties?.owner?.username || item.owner?.username || 'Unknown',
+            is_superuser: item.properties?.owner?.is_superuser || item.owner?.is_superuser || false,
+            groups: item.properties?.owner?.groups || item.owner?.groups || []
+          },
+          created_at: item.properties?.created_at || item.created_at || 'N/A'
+        })),
+        ...notes.map(item => ({
+          ...item,
+          type: 'note',
+          user: {
+            ...item.user,
+            username: item.user?.username || 'Unknown',
+            is_superuser: item.user?.is_superuser || false,
+            groups: item.user?.groups || []
+          },
+          created_at: item.created_at || 'N/A'
+        })),
+        ...comments.map(item => ({
+          ...item,
+          type: 'comment',
+          user: {
+            ...item.user,
+            username: item.user?.username || 'Unknown',
+            is_superuser: item.user?.is_superuser || false,
+            groups: item.user?.groups || []
+          },
+          created_at: item.created_at || 'N/A'
+        })),
+      ]);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching pending items:', err.response?.data || err.message);
+      setError('Не удалось загрузить данные для модерации. Проверьте подключение или обратитесь к администратору. Ошибка: ' + (err.response?.statusText || err.message));
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isLoggedIn || !isModeratorOrAdmin) {
@@ -19,64 +78,6 @@ function ModerationPage() {
       setLoading(false);
       return;
     }
-
-    const fetchPendingItems = async () => {
-      try {
-        const headers = { Authorization: `Token ${localStorage.getItem('authToken')}` };
-        const [placesResponse, notesResponse, commentsResponse] = await Promise.all([
-          axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/places/?moderation_status=pending`, { headers }),
-          axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?moderation_status=pending`, { headers }),
-          axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?moderation_status=pending`, { headers }),
-        ]);
-
-        const places = placesResponse.data.features || placesResponse.data.results || [];
-        const notes = notesResponse.data.results || notesResponse.data || [];
-        const comments = commentsResponse.data.results || commentsResponse.data || [];
-
-        setPendingItems([
-          ...places.map(item => ({
-            ...item,
-            type: 'place',
-            // owner is nested inside properties for GeoJSON, but user object is preferred for consistency
-            user: {
-              ...item.properties?.owner, // Use properties.owner if it exists (for GeoJSON)
-              username: item.properties?.owner?.username || item.owner?.username || 'Unknown', // Fallback for owner
-              is_superuser: item.properties?.owner?.is_superuser || item.owner?.is_superuser || false,
-              groups: item.properties?.owner?.groups || item.owner?.groups || []
-            },
-            created_at: item.properties?.created_at || item.created_at || 'N/A' // Assuming created_at could be in properties or top level
-          })),
-          ...notes.map(item => ({
-            ...item,
-            type: 'note',
-            user: {
-              ...item.user,
-              username: item.user?.username || 'Unknown',
-              is_superuser: item.user?.is_superuser || false,
-              groups: item.user?.groups || []
-            },
-            created_at: item.created_at || 'N/A'
-          })),
-          ...comments.map(item => ({
-            ...item,
-            type: 'comment',
-            user: {
-              ...item.user,
-              username: item.user?.username || 'Unknown',
-              is_superuser: item.user?.is_superuser || false,
-              groups: item.user?.groups || []
-            },
-            created_at: item.created_at || 'N/A'
-          })),
-        ]);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching pending items:', err.response?.data || err.message);
-        setError('Не удалось загрузить данные для модерации. Проверьте подключение или обратитесь к администратору. Ошибка: ' + (err.response?.statusText || err.message));
-        setLoading(false);
-      }
-    };
-
     fetchPendingItems();
   }, [isLoggedIn, isModeratorOrAdmin]);
 
@@ -97,11 +98,10 @@ function ModerationPage() {
         default:
           throw new Error('Неверный тип элемента');
       }
-
-      await axios.patch(url, {}, { headers }); // Empty body since action is in URL
-      setPendingItems(prevItems => prevItems.filter(item => item.id !== itemId));
+      await axios.patch(url, {}, { headers });
+      await fetchPendingItems();
       alert(`${type === 'place' ? 'Место' : type === 'note' ? 'Заметка' : 'Комментарий'} успешно ${action === 'approve' ? 'одобрено' : 'отклонено'}.`);
-      setSelectedItem(null); // Close popup after action
+      setSelectedItem(null);
     } catch (err) {
       console.error('Error moderating item:', err.response?.data || err.message);
       alert('Ошибка при модерации. Попробуйте снова. Ошибка: ' + (err.response?.data?.detail || err.message));
@@ -146,6 +146,43 @@ function ModerationPage() {
     setPopupError(null);
   };
 
+  const handleRejectClick = (item) => {
+    setSelectedItem(item);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const handleRejectSubmit = async () => {
+    if (!selectedItem) return;
+    setRejectLoading(true);
+    try {
+      const headers = { Authorization: `Token ${localStorage.getItem('authToken')}` };
+      let url;
+      switch (selectedItem.type) {
+        case 'place':
+          url = `${process.env.REACT_APP_API_BASE_URL}/api/places/${selectedItem.id}/reject/`;
+          break;
+        case 'note':
+          url = `${process.env.REACT_APP_API_BASE_URL}/api/notes/${selectedItem.id}/reject/`;
+          break;
+        case 'comment':
+          url = `${process.env.REACT_APP_API_BASE_URL}/api/comments/${selectedItem.id}/reject/`;
+          break;
+        default:
+          throw new Error('Неверный тип элемента');
+      }
+      await axios.patch(url, { rejection_reason: rejectReason }, { headers });
+      await fetchPendingItems();
+      setShowRejectModal(false);
+      setSelectedItem(null);
+      alert(`${selectedItem.type === 'place' ? 'Место' : selectedItem.type === 'note' ? 'Заметка' : 'Комментарий'} успешно отклонено.`);
+    } catch (err) {
+      alert('Ошибка при отклонении. Попробуйте снова. Ошибка: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setRejectLoading(false);
+    }
+  };
+
   if (loading) return <div style={{ textAlign: 'center', padding: '20px' }}>Загрузка...</div>;
   if (error) return <div style={{ color: 'red', textAlign: 'center', padding: '20px' }}>{error}</div>;
   if (!isLoggedIn || !isModeratorOrAdmin) return null; // Render nothing if not authorized
@@ -181,7 +218,7 @@ function ModerationPage() {
                   Одобрить
                 </button>
                 <button
-                  onClick={() => handleModeration(item.id, item.type, 'reject')}
+                  onClick={() => handleRejectClick(item)}
                   style={{ backgroundColor: '#dc3545', color: 'white' }}
                 >
                   Отклонить
@@ -254,6 +291,38 @@ function ModerationPage() {
               <button onClick={() => handleModeration(selectedItem.id, selectedItem.type, 'approve')} style={{ backgroundColor: '#28a745', color: 'white' }} disabled={loadingPopupData}>Одобрить</button>
               <button onClick={() => handleModeration(selectedItem.id, selectedItem.type, 'reject')} style={{ backgroundColor: '#dc3545', color: 'white', marginLeft: '10px' }} disabled={loadingPopupData}>Отклонить</button>
               <button onClick={closePopup} style={{ backgroundColor: '#6c757d', color: 'white', marginLeft: '10px' }}>Закрыть</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRejectModal && selectedItem && (
+        <div className="modal" onClick={() => setShowRejectModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>Причина отклонения</h3>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={4}
+              style={{ width: '100%', marginBottom: 10 }}
+              placeholder="Укажите причину отклонения (обязательно)"
+              autoFocus
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                onClick={handleRejectSubmit}
+                style={{ backgroundColor: '#dc3545', color: 'white' }}
+                disabled={!rejectReason.trim() || rejectLoading}
+              >
+                Отклонить
+              </button>
+              <button
+                onClick={() => setShowRejectModal(false)}
+                style={{ backgroundColor: '#6c757d', color: 'white' }}
+                disabled={rejectLoading}
+              >
+                Отмена
+              </button>
             </div>
           </div>
         </div>
