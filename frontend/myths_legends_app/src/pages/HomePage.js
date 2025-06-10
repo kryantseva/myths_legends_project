@@ -28,7 +28,7 @@ const customMarkerIcon = new Icon({
 });
 
 const userLocationIcon = new Icon({
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
@@ -100,7 +100,7 @@ function MapButtons({ onLocateMe, onAddPlaceModeToggle, isAddingPlaceMode, isAut
   );
 }
 
-function PlaceInfoModal({ place, onClose }) {
+function PlaceInfoModal({ place, onClose, userLocation }) {
   const { currentUser, isLoggedIn, authToken } = useAuth();
   const [notes, setNotes] = useState([]);
   const [comments, setComments] = useState([]);
@@ -110,6 +110,8 @@ function PlaceInfoModal({ place, onClose }) {
   const [formMsg, setFormMsg] = useState('');
   const [formLoading, setFormLoading] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [distanceToUser, setDistanceToUser] = useState(null);
+
   useEffect(() => {
     if (!place) return;
     const fetchNotesAndComments = async () => {
@@ -127,6 +129,24 @@ function PlaceInfoModal({ place, onClose }) {
     };
     fetchNotesAndComments();
   }, [place]);
+
+  useEffect(() => {
+    if (userLocation && place.geometry) {
+      const coords = parseWktPoint(place.geometry);
+      if (coords) {
+        const toRad = deg => deg * Math.PI / 180;
+        const R = 6371e3; // радиус Земли в метрах
+        const φ1 = toRad(userLocation.lat);
+        const φ2 = toRad(coords.latitude);
+        const Δφ = toRad(coords.latitude - userLocation.lat);
+        const Δλ = toRad(coords.longitude - userLocation.lng);
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        setDistanceToUser(Math.round(R * c));
+      }
+    }
+  }, [userLocation, place.geometry]);
+
   const handleNoteFormChange = (e) => {
     const { name, value, files } = e.target;
     if (name === 'image') setNoteForm(f => ({ ...f, image: files[0] }));
@@ -187,6 +207,9 @@ function PlaceInfoModal({ place, onClose }) {
       <div style={{ background: 'white', borderRadius: 10, padding: 24, minWidth: 350, maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
         <button onClick={onClose} style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', fontSize: 24, cursor: 'pointer' }}>×</button>
         <h2>{properties.name}</h2>
+        {distanceToUser !== null && (
+          <p style={{ color: '#d32f2f', fontWeight: 600 }}>Расстояние до вас: {distanceToUser < 1000 ? `${distanceToUser} м` : `${(distanceToUser/1000).toFixed(2)} км`}</p>
+        )}
         <p><strong>Описание:</strong> {properties.description}</p>
         <p><strong>Категории:</strong> {properties.categories}</p>
         {properties.image && <img src={properties.image} alt={properties.name} style={{ maxWidth: '100%', margin: '10px 0' }} />}
@@ -589,8 +612,9 @@ function HomePage() {
         </div>
       )}
 
-      {/* Модальное окно информации о месте */}
-      <PlaceInfoModal place={selectedPlace} onClose={() => setSelectedPlace(null)} />
+      {selectedPlace && (
+        <PlaceInfoModal place={selectedPlace} onClose={() => setSelectedPlace(null)} userLocation={userLocation} />
+      )}
     </div>
   );
 }
