@@ -29,11 +29,22 @@ class UserNoteSerializer(serializers.ModelSerializer):
     """
     author_username = serializers.CharField(source='user.username', read_only=True)
     user = UserSerializer(read_only=True) # Пользователь только для чтения, заполняется на бэкенде
+    rejection_reason = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    image = serializers.SerializerMethodField()
 
     class Meta:
         model = UserNote
-        fields = ['id', 'place', 'user', 'author_username', 'text', 'rating', 'image', 'moderation_status', 'created_at', 'updated_at']
+        fields = ['id', 'place', 'user', 'author_username', 'text', 'rating', 'image', 'moderation_status', 'created_at', 'updated_at', 'rejection_reason']
         read_only_fields = ['user', 'moderation_status', 'created_at', 'updated_at'] # Поля только для чтения
+
+    def get_image(self, obj):
+        request = self.context.get('request')
+        if obj.image and hasattr(obj.image, 'url'):
+            url = obj.image.url
+            if request is not None:
+                return request.build_absolute_uri(url)
+            return url
+        return None
 
 class CommentSerializer(serializers.ModelSerializer):
     """
@@ -42,10 +53,11 @@ class CommentSerializer(serializers.ModelSerializer):
     """
     author_username = serializers.CharField(source='user.username', read_only=True)
     user = UserSerializer(read_only=True) # Пользователь только для чтения
+    rejection_reason = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = Comment
-        fields = ['id', 'note', 'user', 'author_username', 'text', 'moderation_status', 'created_at', 'updated_at']
+        fields = ['id', 'note', 'user', 'author_username', 'text', 'moderation_status', 'created_at', 'updated_at', 'rejection_reason']
         read_only_fields = ['user', 'moderation_status', 'created_at', 'updated_at'] # Поля только для чтения
 
 class PlaceSerializer(GeoFeatureModelSerializer):
@@ -54,7 +66,8 @@ class PlaceSerializer(GeoFeatureModelSerializer):
     avg_rating = serializers.SerializerMethodField()
     current_user_note = serializers.SerializerMethodField()
     owner = UserSerializer(read_only=True)
-    image = serializers.ImageField(required=False, allow_null=True)
+    image = serializers.SerializerMethodField()
+    rejection_reason = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = Place
@@ -62,7 +75,7 @@ class PlaceSerializer(GeoFeatureModelSerializer):
         fields = [
             "id", "name", "description", "location", "categories", "status",
             "created_at", "updated_at", "image", "distance",
-            "notes_count", "avg_rating", "current_user_note", "owner"
+            "notes_count", "avg_rating", "current_user_note", "owner", "rejection_reason"
         ]
         read_only_fields = [
             'created_at', 'updated_at', 'status', 'notes_count', 'avg_rating', 'current_user_note'
@@ -161,3 +174,12 @@ class PlaceSerializer(GeoFeatureModelSerializer):
             except UserNote.DoesNotExist:
                 return None # Если заметки нет, возвращаем None
         return None # Если пользователь не авторизован, возвращаем None
+
+    def get_image(self, obj):
+        request = self.context.get('request')
+        if obj.image and hasattr(obj.image, 'url'):
+            url = obj.image.url
+            if request is not None:
+                return request.build_absolute_uri(url)
+            return url
+        return None

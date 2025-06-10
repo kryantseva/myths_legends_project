@@ -37,7 +37,20 @@ class PlaceViewSet(viewsets.ModelViewSet):
             notes_count=Count('user_notes', filter=Q(user_notes__moderation_status='approved')),
             avg_rating=Coalesce(Avg('user_notes__rating', filter=Q(user_notes__moderation_status='approved', user_notes__rating__isnull=False)), 0.0)
         )
-        if not (self.request.user.is_superuser or self.request.user.groups.filter(name='Moderators').exists()):
+        user = self.request.user
+        owner_param = self.request.query_params.get('owner')
+        status_param = self.request.query_params.getlist('status')
+        # Если есть фильтр owner (например, профиль)
+        if owner_param:
+            queryset = queryset.filter(owner_id=owner_param)
+            # Если фильтруем по статусу (pending/rejected), применяем фильтр
+            if status_param:
+                queryset = queryset.filter(status__in=status_param)
+        # Если модератор/админ (раздел модерации) — только pending
+        elif user.is_superuser or user.groups.filter(name='Moderators').exists():
+            queryset = queryset.filter(status='pending')
+        # Для карты и остальных — только approved
+        else:
             queryset = queryset.filter(status='approved')
         return queryset
 
@@ -96,9 +109,11 @@ class PlaceViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser | IsModeratorOrAdmin])
     def reject(self, request, pk=None):
         place = self.get_object()
+        reason = request.data.get('rejection_reason', '')
         place.status = 'rejected'
+        place.rejection_reason = reason
         place.save()
-        return Response({'status': 'place rejected', 'id': place.id}, status=status.HTTP_200_OK)
+        return Response({'status': 'place rejected', 'id': place.id, 'rejection_reason': place.rejection_reason}, status=status.HTTP_200_OK)
 
 
 class UserNoteViewSet(viewsets.ModelViewSet):
@@ -117,8 +132,12 @@ class UserNoteViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if not (self.request.user.is_superuser or self.request.user.groups.filter(name='Moderators').exists()):
-            queryset = queryset.filter(moderation_status='approved')
+        user = self.request.user
+        user_param = self.request.query_params.get('user')
+        if user_param:
+            queryset = queryset.filter(user_id=user_param)
+        elif not (user.is_superuser or user.groups.filter(name='Moderators').exists()):
+            queryset = queryset.filter(user=user)
         return queryset
 
     def perform_create(self, serializer):
@@ -143,9 +162,11 @@ class UserNoteViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser | IsModeratorOrAdmin])
     def reject(self, request, pk=None):
         note = self.get_object()
+        reason = request.data.get('rejection_reason', '')
         note.moderation_status = 'rejected'
+        note.rejection_reason = reason
         note.save()
-        return Response({'status': 'note rejected', 'id': note.id}, status=status.HTTP_200_OK)
+        return Response({'status': 'note rejected', 'id': note.id, 'rejection_reason': note.rejection_reason}, status=status.HTTP_200_OK)
 
 
 class CommentViewSet(viewsets.ModelViewSet):
@@ -164,9 +185,12 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        # Remove invalid annotation for user_notes since Comment doesn't relate to user_notes directly
-        if not (self.request.user.is_superuser or self.request.user.groups.filter(name='Moderators').exists()):
-            queryset = queryset.filter(moderation_status='approved')
+        user = self.request.user
+        user_param = self.request.query_params.get('user')
+        if user_param:
+            queryset = queryset.filter(user_id=user_param)
+        elif not (user.is_superuser or user.groups.filter(name='Moderators').exists()):
+            queryset = queryset.filter(user=user)
         return queryset
 
     def perform_create(self, serializer):
@@ -191,6 +215,8 @@ class CommentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUser | IsModeratorOrAdmin])
     def reject(self, request, pk=None):
         comment = self.get_object()
+        reason = request.data.get('rejection_reason', '')
         comment.moderation_status = 'rejected'
+        comment.rejection_reason = reason
         comment.save()
-        return Response({'status': 'comment rejected', 'id': comment.id}, status=status.HTTP_200_OK)
+        return Response({'status': 'comment rejected', 'id': comment.id, 'rejection_reason': comment.rejection_reason}, status=status.HTTP_200_OK)

@@ -55,6 +55,7 @@ class Place(models.Model):
         default=0,
         verbose_name="Количество оценок"
     )
+    rejection_reason = models.TextField(blank=True, null=True, verbose_name="Причина отклонения")
 
     class Meta:
         verbose_name = "Место"
@@ -104,6 +105,7 @@ class UserNote(models.Model):
         null=True,
         verbose_name="Изображение к заметке"
     )
+    rejection_reason = models.TextField(blank=True, null=True, verbose_name="Причина отклонения")
 
     class Meta:
         verbose_name = "Заметка пользователя"
@@ -131,6 +133,7 @@ class Comment(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    rejection_reason = models.TextField(blank=True, null=True, verbose_name="Причина отклонения")
 
     class Meta:
         verbose_name = "Комментарий"

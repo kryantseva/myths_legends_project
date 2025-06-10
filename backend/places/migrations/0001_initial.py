@@ -113,6 +113,10 @@ class Migration(migrations.Migration):
                         verbose_name="Владелец",
                     ),
                 ),
+                (
+                    "rejection_reason",
+                    models.TextField(blank=True, null=True, verbose_name="Причина отклонения"),
+                ),
             ],
             options={
                 "verbose_name": "Место",
@@ -187,6 +191,10 @@ class Migration(migrations.Migration):
                         verbose_name="Пользователь",
                     ),
                 ),
+                (
+                    "rejection_reason",
+                    models.TextField(blank=True, null=True, verbose_name="Причина отклонения"),
+                ),
             ],
             options={
                 "verbose_name": "Заметка пользователя",
@@ -239,6 +247,10 @@ class Migration(migrations.Migration):
                         to=settings.AUTH_USER_MODEL,
                         verbose_name="Пользователь",
                     ),
+                ),
+                (
+                    "rejection_reason",
+                    models.TextField(blank=True, null=True, verbose_name="Причина отклонения"),
                 ),
             ],
             options={
