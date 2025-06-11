@@ -7,8 +7,9 @@ from django.db.models.functions import Coalesce
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Distance
+import logging
 
-from places.models import Place, UserNote, Comment
+from places.models import Place, UserNote, Comment, PlaceImage, NoteImage
 from .serializers import PlaceSerializer, UserNoteSerializer, CommentSerializer
 from .permissions import IsOwnerOrAdminOrReadOnly, IsOwnerOrAdmin, IsModeratorOrAdmin
 from django_filters.rest_framework import DjangoFilterBackend
@@ -35,6 +36,10 @@ class PlaceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        id_in = self.request.query_params.get('id__in')
+        if id_in:
+            ids = [int(i) for i in id_in.split(',') if i]
+            return Place.objects.filter(id__in=ids)
         user = self.request.user
         owner_param = self.request.query_params.get('owner')
         status_param = self.request.query_params.getlist('status')
@@ -53,8 +58,20 @@ class PlaceViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        logger = logging.getLogger('django')
+        logger.warning(f'FILES: {self.request.FILES}')
+        logger.warning(f'DATA: {self.request.data}')
+        logger.warning(f'USER: {self.request.user}')
         status = 'approved' if self.request.user.is_superuser else 'pending'
-        serializer.save(owner=self.request.user, status=status)
+        instance = serializer.save(owner=self.request.user, status=status)
+        logger.warning(f'CREATED INSTANCE: {instance}')
+
+        # Обработка загрузки нескольких файлов (до 5)
+        image_files = self.request.FILES.getlist('image_files')
+        for i, img in enumerate(image_files):
+            if i >= 5:
+                break
+            PlaceImage.objects.create(place=instance, image=img)
 
     @action(detail=False, methods=['get'])
     def nearest(self, request):
@@ -141,7 +158,13 @@ class UserNoteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         status = 'approved' if self.request.user.is_superuser else 'pending'
-        serializer.save(user=self.request.user, moderation_status=status)
+        note = serializer.save(user=self.request.user, moderation_status=status)
+        # Обработка загрузки нескольких файлов (до 5)
+        image_files = self.request.FILES.getlist('image_files')
+        for i, img in enumerate(image_files):
+            if i >= 5:
+                break
+            NoteImage.objects.create(note=note, image=img)
 
     def perform_update(self, serializer):
         if serializer.instance.moderation_status == 'approved' and self.request.user == serializer.instance.user:

@@ -101,6 +101,17 @@ function MapButtons({ onLocateMe, onAddPlaceModeToggle, isAddingPlaceMode, isAut
   );
 }
 
+// --- Lightbox для предпросмотра изображений ---
+function ImageLightbox({ src, alt, onClose }) {
+  if (!src) return null;
+  return (
+    <div style={{ position: 'fixed', zIndex: 9999, top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+      <img src={src} alt={alt} style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: 12, boxShadow: '0 4px 32px #0008' }} onClick={e => e.stopPropagation()} />
+      <button onClick={onClose} style={{ position: 'fixed', top: 30, right: 40, fontSize: 36, color: '#fff', background: 'none', border: 'none', cursor: 'pointer', zIndex: 10000 }}>×</button>
+    </div>
+  );
+}
+
 function PlaceInfoModal({ place, onClose, userLocation }) {
   const { currentUser, isLoggedIn, authToken } = useAuth();
   const [notes, setNotes] = useState([]);
@@ -114,6 +125,11 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
   const [distanceToUser, setDistanceToUser] = useState(null);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  // --- state для lightbox ---
+  const [lightboxImg, setLightboxImg] = useState(null);
+  // --- state для множественных файлов заметки ---
+  const [noteImages, setNoteImages] = useState([]); // File[]
+  const [noteImagePreviews, setNoteImagePreviews] = useState([]); // string[]
 
   useEffect(() => {
     if (!place) return;
@@ -156,8 +172,13 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
 
   const handleNoteFormChange = (e) => {
     const { name, value, files } = e.target;
-    if (name === 'image') setNoteForm(f => ({ ...f, image: files[0] }));
-    else setNoteForm(f => ({ ...f, [name]: value }));
+    if (name === 'images') {
+      let selectedFiles = Array.from(files).slice(0, 5);
+      setNoteImages(selectedFiles);
+      setNoteImagePreviews(selectedFiles.map(file => URL.createObjectURL(file)));
+    } else {
+      setNoteForm(f => ({ ...f, [name]: value }));
+    }
   };
   const handleCommentFormChange = (e) => {
     const { name, value } = e.target;
@@ -173,11 +194,13 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
         const formData = new FormData();
         formData.append('place', place.id);
         formData.append('text', noteForm.text);
-        if (noteForm.image) formData.append('image', noteForm.image);
+        noteImages.slice(0, 5).forEach(file => formData.append('image_files', file));
         await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/notes/`, formData, {
           headers: { Authorization: `Token ${authToken}` }
         });
         setNoteForm({ text: '', image: null });
+        setNoteImages([]);
+        setNoteImagePreviews([]);
         setFormMsg('');
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
@@ -221,46 +244,84 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
     setFavoriteLoading(false);
   };
 
+  const handleRemoveNoteImage = (idx) => {
+    setNoteImages(prev => prev.filter((_, i) => i !== idx));
+    setNoteImagePreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
   if (!place) return null;
   const properties = place.properties || {};
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: '#fff', borderRadius: 18, boxShadow: '0 4px 32px #0002', padding: 32, minWidth: 350, maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
         <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 18, background: 'none', border: 'none', fontSize: 28, cursor: 'pointer', color: '#888' }} title="Закрыть"><FaTimes /></button>
-        <h2 style={{ display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: 26, marginBottom: 10 }}><FaMapMarkedAlt style={{ marginRight: 10, color: '#007bff' }} /> {properties.name}</h2>
-        {distanceToUser !== null && (
-          <p style={{ color: '#d32f2f', fontWeight: 600, marginBottom: 8 }}><FaLocationArrow style={{ marginRight: 6 }} />Расстояние до вас: {distanceToUser < 1000 ? `${distanceToUser} м` : `${(distanceToUser/1000).toFixed(2)} км`}</p>
-        )}
-        <div style={{ marginBottom: 10, color: '#444', fontSize: 16 }}><FaAlignLeft style={{ marginRight: 7, color: '#888' }} /><strong>Описание:</strong> {properties.description}</div>
-        <div style={{ marginBottom: 10, color: '#444', fontSize: 16 }}><FaTag style={{ marginRight: 7, color: '#888' }} /><strong>Категории:</strong> {properties.categories}</div>
-        {properties.image && <img src={properties.image} alt={properties.name} style={{ maxWidth: '100%', margin: '10px 0', borderRadius: 10, boxShadow: '0 2px 8px #0001' }} />}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
-          <button onClick={handleToggleFavorite} disabled={favoriteLoading} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22 }} title={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}>
+        {/* Кнопка избранное в левом верхнем углу */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, justifyContent: 'flex-start' }}>
+          <button onClick={handleToggleFavorite} disabled={favoriteLoading} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 28 }} title={isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}>
             <FaStar color={isFavorite ? '#FFD600' : '#bbb'} />
           </button>
           <span style={{ fontWeight: 500, color: isFavorite ? '#FFD600' : '#888', fontSize: 16 }}>
             {isFavorite ? 'В избранном!' : 'Добавить в избранное'}
           </span>
         </div>
+        <h2 style={{ display: 'flex', alignItems: 'center', fontWeight: 700, fontSize: 26, marginBottom: 10 }}><FaMapMarkedAlt style={{ marginRight: 10, color: '#007bff' }} /> {properties.name}</h2>
+        {/* Дата создания и владелец места */}
+        <div style={{ color: '#888', fontSize: 15, marginBottom: 8 }}>
+          {properties.created_at && <span>Создано: {new Date(properties.created_at).toLocaleString()} </span>}
+          {properties.owner && properties.owner.username && <span> | Владелец: {properties.owner.username}</span>}
+        </div>
+        {distanceToUser !== null && (
+          <p style={{ color: '#d32f2f', fontWeight: 600, marginBottom: 8 }}><FaLocationArrow style={{ marginRight: 6 }} />Расстояние до вас: {distanceToUser < 1000 ? `${distanceToUser} м` : `${(distanceToUser/1000).toFixed(2)} км`}</p>
+        )}
+        <div style={{ marginBottom: 10, color: '#444', fontSize: 16 }}><FaAlignLeft style={{ marginRight: 7, color: '#888' }} /><strong>Описание:</strong> {properties.description}</div>
+        <div style={{ marginBottom: 10, color: '#444', fontSize: 16 }}><FaTag style={{ marginRight: 7, color: '#888' }} /><strong>Категории:</strong> {properties.categories}</div>
+        {/* Галерея изображений места */}
+        {Array.isArray(properties.images) && properties.images.length > 0 && (
+          <div style={{ display: 'flex', gap: 12, margin: '12px 0', flexWrap: 'wrap' }}>
+            {properties.images.map((img, idx) => (
+              <img key={idx} src={img.image} alt={`place-img-${idx}`} style={{ width: properties.images.length === 1 ? 400 : 120, height: properties.images.length === 1 ? 'auto' : 120, maxWidth: '100%', objectFit: 'cover', borderRadius: 10, boxShadow: '0 2px 8px #0001', cursor: 'pointer' }} onClick={() => setLightboxImg(img.image)} />
+            ))}
+          </div>
+        )}
+        <ImageLightbox src={lightboxImg} alt="preview" onClose={() => setLightboxImg(null)} />
         <div style={{ marginTop: 18 }}>
           <h4 style={{ display: 'flex', alignItems: 'center', fontSize: 18, margin: 0, marginBottom: 8 }}><FaStickyNote style={{ marginRight: 7, color: '#43a047' }} /> Заметки</h4>
           {notes.length === 0 ? <p style={{ color: '#888' }}>Нет заметок</p> : (
             <ul style={{ paddingLeft: 0, listStyle: 'none' }}>
               {notes.map(note => (
-                <li key={note.id} style={{ marginBottom: 6, fontSize: 15 }}>
-                  <b>{note.text}</b>
-                  {note.image && <img src={note.image} alt="note" style={{ maxWidth: 60, marginLeft: 8, borderRadius: 6 }} />}
+                <li key={note.id} style={{ marginBottom: 12, fontSize: 15, borderBottom: '1px solid #f0f0f0', paddingBottom: 8 }}>
+                  <div style={{ color: '#888', fontSize: 13, marginBottom: 2 }}>
+                    {note.user && note.user.username && <span>Автор: {note.user.username}</span>}
+                    {note.created_at && <span> | {new Date(note.created_at).toLocaleString()}</span>}
+                  </div>
+                  <span style={{ fontWeight: 400 }}>{note.text}</span>
+                  {/* Галерея для заметок */}
+                  {Array.isArray(note.images) && note.images.length > 0 && (
+                    <div style={{ display: 'flex', gap: 8, margin: '8px 0', flexWrap: 'wrap' }}>
+                      {note.images.map((img, idx) => (
+                        <img key={idx} src={img.image} alt={`note-img-${idx}`} style={{ width: note.images.length === 1 ? 250 : 100, height: note.images.length === 1 ? 'auto' : 100, objectFit: 'cover', borderRadius: 8, boxShadow: '0 2px 8px #0001', cursor: 'pointer' }} onClick={() => setLightboxImg(img.image)} />
+                      ))}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </div>
-        <div style={{ marginTop: 18 }}>
+        {/* Визуальный разделитель */}
+        <hr style={{ margin: '18px 0', border: 0, borderTop: '1.5px solid #e0e0e0' }} />
+        <div style={{ marginTop: 0 }}>
           <h4 style={{ display: 'flex', alignItems: 'center', fontSize: 18, margin: 0, marginBottom: 8 }}><FaCommentDots style={{ marginRight: 7, color: '#ff9800' }} /> Комментарии</h4>
           {comments.length === 0 ? <p style={{ color: '#888' }}>Нет комментариев</p> : (
             <ul style={{ paddingLeft: 0, listStyle: 'none' }}>
               {comments.map(comment => (
-                <li key={comment.id} style={{ marginBottom: 6, fontSize: 15 }}>{comment.text}</li>
+                <li key={comment.id} style={{ marginBottom: 6, fontSize: 15 }}>
+                  <div style={{ color: '#888', fontSize: 13, marginBottom: 2 }}>
+                    {comment.user && comment.user.username && <span>Автор: {comment.user.username}</span>}
+                    {comment.created_at && <span> | {new Date(comment.created_at).toLocaleString()}</span>}
+                  </div>
+                  <span style={{ fontWeight: 400 }}>{comment.text}</span>
+                </li>
               ))}
             </ul>
           )}
@@ -286,7 +347,18 @@ function PlaceInfoModal({ place, onClose, userLocation }) {
                   style={{ width: '100%', borderRadius: 8, border: '1px solid #ccc', padding: 10, fontSize: 15, marginBottom: 8 }}
                 />
                 <div style={{ margin: '10px 0' }}>
-                  <FaImage style={{ marginRight: 6, color: '#888' }} /> Картинка: <input type="file" name="image" accept="image/*" onChange={handleNoteFormChange} />
+                  <FaImage style={{ marginRight: 6, color: '#888' }} /> Картинки (до 5):
+                  <input type="file" name="images" accept="image/*" multiple onChange={handleNoteFormChange} />
+                  {noteImagePreviews.length > 0 && (
+                    <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                      {noteImagePreviews.map((src, idx) => (
+                        <div key={idx} style={{ position: 'relative', display: 'inline-block' }}>
+                          <img src={src} alt={`preview-${idx}`} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, boxShadow: '0 2px 8px #0001', cursor: 'pointer' }} onClick={() => setLightboxImg(src)} />
+                          <button type="button" onClick={() => handleRemoveNoteImage(idx)} style={{ position: 'absolute', top: -8, right: -8, background: '#fff', border: '1px solid #888', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', color: '#d32f2f', fontWeight: 700, fontSize: 16, lineHeight: '18px', padding: 0 }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
@@ -377,13 +449,15 @@ function HomePage() {
     name: '',
     description: '',
     categories: '',
-    image: null,
+    images: [],
   });
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [formMessage, setFormMessage] = useState('');
   const [showModerationAlert, setShowModerationAlert] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [addToFavorite, setAddToFavorite] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
 
   const kazanCoordinates = [55.7961, 49.1064];
   const initialZoom = 15;
@@ -461,27 +535,36 @@ function HomePage() {
 
   const handleFormChange = (e) => {
     const { name, value, files } = e.target;
-    if (name === 'image') {
-      setNewPlaceData(prevData => ({ ...prevData, image: files[0] }));
+    if (name === 'images') {
+      let selectedFiles = Array.from(files).slice(0, 5);
+      setNewPlaceData(prevData => ({ ...prevData, images: selectedFiles }));
+      // генерируем превью
+      const previews = selectedFiles.map(file => URL.createObjectURL(file));
+      setImagePreviews(previews);
     } else {
       setNewPlaceData(prevData => ({ ...prevData, [name]: value }));
     }
   };
 
+  const handleRemoveImage = (idx) => {
+    setNewPlaceData(prevData => {
+      const newImages = prevData.images.filter((_, i) => i !== idx);
+      return { ...prevData, images: newImages };
+    });
+    setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleNewPlaceSubmit = async (e) => {
     e.preventDefault();
     setFormMessage('Сохранение места...');
-
     if (!authToken) {
       setFormMessage('Ошибка: Необходимо авторизоваться.');
       return;
     }
-
     if (!newPlaceCoordinates) {
       setFormMessage('Ошибка: Сначала выберите координаты на карте.');
       return;
     }
-
     const formData = new FormData();
     const geometryObject = {
         type: "Point",
@@ -494,18 +577,20 @@ function HomePage() {
         categories: newPlaceData.categories,
     };
     formData.append('properties', JSON.stringify(propertiesObject));
-    if (newPlaceData.image) formData.append('image', newPlaceData.image);
-
+    // добавляем до 5 файлов
+    (newPlaceData.images || []).slice(0, 5).forEach(file => {
+      formData.append('image_files', file);
+    });
     try {
       const headers = {
         Authorization: `Token ${authToken}`,
       };
       const response = await axios.post(`${process.env.REACT_APP_API_BASE_URL}/api/places/`, formData, { headers });
-
       if (response.status === 201) {
         setFormMessage('Место успешно добавлено и ожидает модерации!');
         setNewPlaceCoordinates(null);
-        setNewPlaceData({ name: '', description: '', categories: '', image: null });
+        setNewPlaceData({ name: '', description: '', categories: '', images: [] });
+        setImagePreviews([]);
         fetchPlaces();
         setShowModerationAlert(true);
         setAddToFavorite(false);
@@ -600,8 +685,12 @@ function HomePage() {
         return dist <= radius;
       });
     }
+    // Фильтрация по избранным
+    if (showOnlyFavorites) {
+      filtered = filtered.filter(place => place.properties?.is_favorite || place.is_favorite);
+    }
     setFilteredPlaces(filtered);
-  }, [places, selectedCategories, nearMe, radius, userLocation]);
+  }, [places, selectedCategories, nearMe, radius, userLocation, showOnlyFavorites]);
 
   // --- ПОИСК ПО НАЗВАНИЮ И КАТЕГОРИЯМ ---
   const handleSearch = () => {
@@ -685,6 +774,17 @@ function HomePage() {
             style={{ marginLeft: 10, verticalAlign: 'middle' }}
           />
           <span style={{ marginLeft: 6, color: nearMe ? '#007bff' : '#888' }}>{radius} км</span>
+        </div>
+        <div style={{ marginLeft: 24 }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={showOnlyFavorites}
+              onChange={e => setShowOnlyFavorites(e.target.checked)}
+              style={{ marginRight: 6 }}
+            />
+            Только избранные
+          </label>
         </div>
         {(selectedCategories.length > 0 || nearMe) && (
           <button onClick={handleResetFilters} style={{ marginLeft: 18, color: '#333', background: '#f0f0f0', border: '1px solid #bbb', borderRadius: 8, padding: '3px 12px', cursor: 'pointer' }}>Сбросить фильтры</button>
@@ -866,8 +966,18 @@ function HomePage() {
               <input type="text" name="categories" value={newPlaceData.categories} onChange={handleFormChange} style={{ width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ccc', fontSize: 16 }} required />
             </div>
             <div style={{ marginBottom: 14 }}>
-              <label style={{ fontWeight: 600, marginBottom: 4, display: 'block' }}><FaImage style={{ marginRight: 6, color: '#888' }} /> Картинка:</label>
-              <input type="file" name="image" accept="image/*" onChange={handleFormChange} />
+              <label style={{ fontWeight: 600, marginBottom: 4, display: 'block' }}><FaImage style={{ marginRight: 6, color: '#888' }} /> Картинки (до 5):</label>
+              <input type="file" name="images" accept="image/*" multiple onChange={handleFormChange} />
+              {imagePreviews.length > 0 && (
+                <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                  {imagePreviews.map((src, idx) => (
+                    <div key={idx} style={{ position: 'relative', display: 'inline-block' }}>
+                      <img src={src} alt={`preview-${idx}`} style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 8, boxShadow: '0 2px 8px #0001' }} />
+                      <button type="button" onClick={() => handleRemoveImage(idx)} style={{ position: 'absolute', top: -8, right: -8, background: '#fff', border: '1px solid #888', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', color: '#d32f2f', fontWeight: 700, fontSize: 16, lineHeight: '18px', padding: 0 }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <button type="submit" style={{ width: '100%', padding: 12, background: '#28a745', color: 'white', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><FaPlus /> Сохранить</button>
             {formMessage && <div style={{ color: formMessage.startsWith('Ошибка') ? 'red' : 'orange', marginTop: 8 }}>{formMessage}</div>}

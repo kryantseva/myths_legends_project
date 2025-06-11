@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db.models import Avg, Count
 from django.db.models.functions import Coalesce
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 
 User = get_user_model()
 
@@ -128,3 +130,50 @@ class Comment(models.Model):
 
     def can_moderate(self, user):
         return user.is_superuser or user.groups.filter(name='Moderators').exists()
+
+
+class PlaceImage(models.Model):
+    place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name='images', verbose_name='Место')
+    image = models.ImageField(upload_to='place_images/', verbose_name='Изображение')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Изображение места'
+        verbose_name_plural = 'Изображения мест'
+
+    def __str__(self):
+        return f"Изображение для {self.place.name} ({self.id})"
+
+@receiver(post_delete, sender=PlaceImage)
+def delete_place_image_file(sender, instance, **kwargs):
+    if instance.image:
+        instance.image.delete(False)
+
+@receiver(post_delete, sender=Place)
+def delete_all_place_images(sender, instance, **kwargs):
+    for img in instance.images.all():
+        if img.image:
+            img.image.delete(False)
+
+class NoteImage(models.Model):
+    note = models.ForeignKey(UserNote, on_delete=models.CASCADE, related_name='images', verbose_name='Заметка')
+    image = models.ImageField(upload_to='note_images/', verbose_name='Изображение')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Изображение заметки'
+        verbose_name_plural = 'Изображения заметок'
+
+    def __str__(self):
+        return f"Изображение для заметки {self.note.id} ({self.id})"
+
+@receiver(post_delete, sender=NoteImage)
+def delete_note_image_file(sender, instance, **kwargs):
+    if instance.image:
+        instance.image.delete(False)
+
+@receiver(post_delete, sender=UserNote)
+def delete_all_note_images(sender, instance, **kwargs):
+    for img in instance.images.all():
+        if img.image:
+            img.image.delete(False)

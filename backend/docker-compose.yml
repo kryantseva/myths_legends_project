@@ -20,7 +20,7 @@ services:
     command: bash -c "/usr/local/bin/wait-for-it.sh -h db -p 5432 -- python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
-      - media_data:/app/media
+      - ./media:/app/media
     ports:
       - "8000:8000"
     depends_on:
@@ -37,4 +37,3 @@ services:
 
 volumes:
   pgdata:
-  media_data:

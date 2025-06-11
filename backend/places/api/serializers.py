@@ -3,11 +3,12 @@
 from rest_framework_gis.serializers import GeoFeatureModelSerializer
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from places.models import Place, UserNote, Comment
+from places.models import Place, UserNote, Comment, PlaceImage, NoteImage
 from django.db.models import Avg, Count, F, Q
 from django.contrib.gis.geos import Point # Импорт для работы с географическими точками
 import json # Импорт для парсинга JSON-строк
 
+# --- UserSerializer должен быть первым ---
 class UserSerializer(serializers.ModelSerializer):
     """
     Сериализатор для модели User, включающий группы пользователя.
@@ -22,6 +23,42 @@ class UserSerializer(serializers.ModelSerializer):
         """Возвращает список названий групп, к которым принадлежит пользователь."""
         return [group.name for group in obj.groups.all()]
 
+# --- Сначала сериализаторы изображений ---
+class PlaceImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PlaceImage
+        fields = ['id', 'image', 'image_url', 'uploaded_at']
+        read_only_fields = ['id', 'image_url', 'uploaded_at']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image and hasattr(obj.image, 'url'):
+            url = obj.image.url
+            if request is not None:
+                return request.build_absolute_uri(url)
+            return url
+        return None
+
+class NoteImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NoteImage
+        fields = ['id', 'image', 'image_url', 'uploaded_at']
+        read_only_fields = ['id', 'image_url', 'uploaded_at']
+
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image and hasattr(obj.image, 'url'):
+            url = obj.image.url
+            if request is not None:
+                return request.build_absolute_uri(url)
+            return url
+        return None
+
+# --- Теперь UserNoteSerializer ---
 class UserNoteSerializer(serializers.ModelSerializer):
     """
     Сериализатор для модели UserNote (заметки пользователя),
@@ -31,10 +68,11 @@ class UserNoteSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True) # Пользователь только для чтения, заполняется на бэкенде
     rejection_reason = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     image = serializers.ImageField(required=False, allow_null=True)
+    images = NoteImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = UserNote
-        fields = ['id', 'place', 'user', 'author_username', 'text', 'image', 'moderation_status', 'created_at', 'updated_at', 'rejection_reason']
+        fields = ['id', 'place', 'user', 'author_username', 'text', 'image', 'images', 'moderation_status', 'created_at', 'updated_at', 'rejection_reason']
         read_only_fields = ['user', 'moderation_status', 'created_at', 'updated_at'] # Поля только для чтения
 
     def get_image(self, obj):
@@ -65,22 +103,24 @@ class PlaceSerializer(GeoFeatureModelSerializer):
     notes_count = serializers.SerializerMethodField()
     current_user_note = serializers.SerializerMethodField()
     owner = UserSerializer(read_only=True)
-    image = serializers.SerializerMethodField()
+    image = serializers.ImageField(required=False, allow_null=True)
+    image_url = serializers.SerializerMethodField()
     rejection_reason = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     is_favorite = serializers.SerializerMethodField()
     favorites_count = serializers.SerializerMethodField()
+    images = PlaceImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Place
         geo_field = "location"
         fields = [
             "id", "name", "description", "location", "categories", "status",
-            "created_at", "updated_at", "image", "distance",
+            "created_at", "updated_at", "image", "image_url", "distance",
             "notes_count", "current_user_note", "owner", "rejection_reason",
-            "is_favorite", "favorites_count"
+            "is_favorite", "favorites_count", "images"
         ]
         read_only_fields = [
-            'created_at', 'updated_at', 'status', 'notes_count', 'current_user_note', 'is_favorite', 'favorites_count'
+            'created_at', 'updated_at', 'status', 'notes_count', 'current_user_note', 'is_favorite', 'favorites_count', 'image_url'
         ]
 
     # to_internal_value остается таким же, чтобы парсить входящие строки 'geometry' и 'properties'
@@ -94,12 +134,21 @@ class PlaceSerializer(GeoFeatureModelSerializer):
             except json.JSONDecodeError:
                 raise serializers.ValidationError({"geometry": "Invalid JSON format for geometry."})
         
-        # Обработка 'properties'
+        # Обработка 'properties' — теперь явно добавляем все поля из properties в mutable_data
         if 'properties' in mutable_data and isinstance(mutable_data['properties'], str):
             try:
-                mutable_data['properties'] = json.loads(mutable_data['properties'])
+                props = json.loads(mutable_data['properties'])
+                for k, v in props.items():
+                    mutable_data[k] = v
+                # Удаляем поле properties, чтобы не было ошибки в DRF GIS
+                del mutable_data['properties']
             except json.JSONDecodeError:
                 raise serializers.ValidationError({"properties": "Invalid JSON format for properties."})
+
+        # КЛЮЧЕВОЕ: переносим geometry в location
+        if 'geometry' in mutable_data:
+            mutable_data['location'] = mutable_data['geometry']
+            del mutable_data['geometry']
 
         return super().to_internal_value(mutable_data)
 
@@ -165,7 +214,7 @@ class PlaceSerializer(GeoFeatureModelSerializer):
             return UserNoteSerializer(notes, many=True, context={'request': request}).data
         return []
 
-    def get_image(self, obj):
+    def get_image_url(self, obj):
         request = self.context.get('request')
         if obj.image and hasattr(obj.image, 'url'):
             url = obj.image.url

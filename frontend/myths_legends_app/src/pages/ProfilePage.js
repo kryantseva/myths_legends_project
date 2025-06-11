@@ -217,7 +217,14 @@ function ProfilePage() {
                   <span style={{ fontWeight: 600, fontSize: 17 }}>{place.properties?.name || place.name}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
                     {place.properties?.categories && place.properties.categories.split(',').map(cat => <Chip key={cat} label={cat.trim()} color="#007bff" />)}
-                    <span style={{ color: '#888', fontSize: 13 }}>{place.properties?.created_at || place.created_at ? new Date(place.properties?.created_at || place.created_at).toLocaleString() : ''}</span>
+                    {/* Галерея для approved мест */}
+                    {Array.isArray(place.images) && place.images.length > 0 && (
+                      <div style={{ display: 'flex', gap: 8, margin: '8px 0', flexWrap: 'wrap' }}>
+                        {place.images.map((img, idx) => (
+                          <img key={idx} src={img.image} alt={`place-img-${idx}`} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', boxShadow: '0 2px 8px #0001' }} onClick={() => window.open(img.image, '_blank')} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </li>
               ))}
@@ -242,6 +249,14 @@ function ProfilePage() {
                 return (
                   <li key={note.id} style={{ marginBottom: 10, padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
                     <span style={{ fontWeight: 500 }}>{note.text}</span>
+                    {/* Галерея для approved заметок */}
+                    {Array.isArray(note.images) && note.images.length > 0 && (
+                      <div style={{ display: 'flex', gap: 8, margin: '8px 0', flexWrap: 'wrap' }}>
+                        {note.images.map((img, idx) => (
+                          <img key={idx} src={img.image} alt={`note-img-${idx}`} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', boxShadow: '0 2px 8px #0001' }} onClick={() => window.open(img.image, '_blank')} />
+                        ))}
+                      </div>
+                    )}
                     {placeId && (
                       <span style={{ color: placeName ? '#007bff' : '#d32f2f', marginLeft: 8, fontSize: 14 }}>
                         (Место: {placeName || `неизвестно (id: ${placeId})`})
@@ -332,6 +347,14 @@ function ProfilePage() {
                     {moderationPlaces.map(place => (
                       <li key={place.id} style={{ marginBottom: 8, padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
                         <span style={{ fontWeight: 600 }}>{place.properties?.name || place.name}</span>
+                        {/* Галерея для мест на модерации */}
+                        {Array.isArray(place.images) && place.images.length > 0 && (
+                          <div style={{ display: 'flex', gap: 8, margin: '8px 0', flexWrap: 'wrap' }}>
+                            {place.images.map((img, idx) => (
+                              <img key={idx} src={img.image} alt={`place-img-${idx}`} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', boxShadow: '0 2px 8px #0001' }} onClick={() => window.open(img.image, '_blank')} />
+                            ))}
+                          </div>
+                        )}
                         <Chip
                           label={place.properties?.status === 'rejected' || place.status === 'rejected' ? 'Отклонено' : place.properties?.status === 'pending' || place.status === 'pending' ? 'На рассмотрении' : 'Одобрено'}
                           color={place.properties?.status === 'rejected' || place.status === 'rejected' ? '#d32f2f' : place.properties?.status === 'pending' || place.status === 'pending' ? '#ff9800' : '#007bff'}
@@ -352,6 +375,14 @@ function ProfilePage() {
                     {moderationNotes.map(note => (
                       <li key={note.id} style={{ marginBottom: 8, padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
                         <span style={{ fontWeight: 500 }}>{note.text}</span>
+                        {/* Галерея для заметок на модерации */}
+                        {Array.isArray(note.images) && note.images.length > 0 && (
+                          <div style={{ display: 'flex', gap: 8, margin: '8px 0', flexWrap: 'wrap' }}>
+                            {note.images.map((img, idx) => (
+                              <img key={idx} src={img.image} alt={`note-img-${idx}`} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', boxShadow: '0 2px 8px #0001' }} onClick={() => window.open(img.image, '_blank')} />
+                            ))}
+                          </div>
+                        )}
                         <Chip
                           label={note.moderation_status === 'rejected' ? 'Отклонено' : note.moderation_status === 'pending' ? 'На рассмотрении' : 'Одобрено'}
                           color={note.moderation_status === 'rejected' ? '#d32f2f' : note.moderation_status === 'pending' ? '#ff9800' : '#007bff'}
