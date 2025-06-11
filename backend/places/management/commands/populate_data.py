@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
-from places.models import Place, UserNote, Comment
+from places.models import Place, UserNote, Comment, PlaceImage, NoteImage
 from rest_framework.authtoken.models import Token
 import random
 import os
@@ -97,7 +97,7 @@ class Command(BaseCommand):
 
         created_places = []
         for data in places_data:
-            place_image = self._create_dummy_image(width=random.randint(400, 800), height=random.randint(300, 600)) if random.random() < 0.7 else None
+            place_image_file = self._create_dummy_image(width=random.randint(400, 800), height=random.randint(300, 600)) if random.random() < 0.7 else None
             place, created = Place.objects.get_or_create(
                 name=data['name'],
                 defaults={
@@ -106,9 +106,11 @@ class Command(BaseCommand):
                     'categories': data['categories'],
                     'owner': data['owner'],
                     'status': data['status'],
-                    'image': place_image
+                    'image': None  # Не кладём картинку напрямую
                 }
             )
+            if place_image_file:
+                PlaceImage.objects.create(place=place, image=place_image_file)
             created_places.append(place)
             if created:
                 self.stdout.write(self.style.SUCCESS(f'Created place: {place.name} (Status: {place.status}, Owner: {place.owner.username})'))
@@ -185,8 +187,10 @@ class Command(BaseCommand):
                     place=place,
                     text=random.choice(note_texts),
                     moderation_status=status,
-                    image=note_image
+                    image=None  # Не кладём картинку напрямую
                 )
+                if note_image:
+                    NoteImage.objects.create(note=note, image=note_image)
                 if status == 'rejected':
                     note.rejection_reason = random.choice(rejection_reasons)
                     note.save()

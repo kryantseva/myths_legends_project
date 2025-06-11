@@ -88,8 +88,8 @@ function ProfilePage() {
           ...(Array.isArray(moderationPlacesPendingData) ? moderationPlacesPendingData : []),
           ...(Array.isArray(moderationPlacesRejectedData) ? moderationPlacesRejectedData : [])
         ]);
-        // Заметки (approved, все пользователи)
-        const notesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?moderation_status=approved&page_size=1000`, { headers });
+        // Заметки (approved, только текущего пользователя)
+        const notesResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/notes/?user=${currentUser.id}&moderation_status=approved&page_size=1000`, { headers });
         const notesData = notesResponse.data.results || notesResponse.data;
         setUserNotes(Array.isArray(notesData) ? notesData : []);
         // Заметки пользователя на модерации (pending)
@@ -102,8 +102,8 @@ function ProfilePage() {
           ...(Array.isArray(moderationNotesPendingData) ? moderationNotesPendingData : []),
           ...(Array.isArray(moderationNotesRejectedData) ? moderationNotesRejectedData : [])
         ]);
-        // Комментарии (approved, все пользователи)
-        const commentsResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?moderation_status=approved&page_size=1000`, { headers });
+        // Комментарии (approved, только текущего пользователя)
+        const commentsResponse = await axios.get(`${process.env.REACT_APP_API_BASE_URL}/api/comments/?user=${currentUser.id}&moderation_status=approved&page_size=1000`, { headers });
         const commentsData = commentsResponse.data.results || commentsResponse.data;
         setUserComments(Array.isArray(commentsData) ? commentsData : []);
         // Комментарии пользователя на модерации (pending)
