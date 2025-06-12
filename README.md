@@ -14,6 +14,9 @@
 - Профиль пользователя с избранным и личными заметками
 - Админка и модерация
 
+## Видеообзор:
+https://drive.google.com/file/d/1PEzWBRncLo3zRKY_6mcO0YefPmJIaPL-/view?usp=drive_link
+
 ---
 
 ## Быстрый старт (локально, через Docker Compose)
