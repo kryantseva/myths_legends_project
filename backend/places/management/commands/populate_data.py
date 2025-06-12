@@ -96,8 +96,8 @@ class Command(BaseCommand):
                 ]
 
         created_places = []
+        petropavlovsky_sobor = None
         for data in places_data:
-            place_image_file = self._create_dummy_image(width=random.randint(400, 800), height=random.randint(300, 600)) if random.random() < 0.7 else None
             place, created = Place.objects.get_or_create(
                 name=data['name'],
                 defaults={
@@ -109,13 +109,25 @@ class Command(BaseCommand):
                     'image': None  # Не кладём картинку напрямую
                 }
             )
-            if place_image_file:
-                PlaceImage.objects.create(place=place, image=place_image_file)
             created_places.append(place)
+            if data['name'] == 'Петропавловский собор':
+                petropavlovsky_sobor = place
             if created:
                 self.stdout.write(self.style.SUCCESS(f'Created place: {place.name} (Status: {place.status}, Owner: {place.owner.username})'))
             else:
                 self.stdout.write(self.style.WARNING(f'Place "{place.name}" already exists. (Status: {place.status}, Owner: {place.owner.username})'))
+
+        # Добавляем sobor.jpg и sobor2.jpg к Петропавловскому собору
+        if petropavlovsky_sobor:
+            place_img_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../media/place_images'))
+            for img_name in ['sobor.jpg', 'sobor2.jpg']:
+                img_path = os.path.join(place_img_dir, img_name)
+                if os.path.exists(img_path):
+                    with open(img_path, 'rb') as f:
+                        PlaceImage.objects.create(place=petropavlovsky_sobor, image=File(f, name=img_name))
+                        self.stdout.write(self.style.SUCCESS(f'  Added image {img_name} to Петропавловский собор'))
+                else:
+                    self.stdout.write(self.style.ERROR(f'  Image {img_name} not found for Петропавловский собор'))
 
         # Очищаем битые заметки и комментарии после создания мест, но до создания новых заметок и комментариев
         UserNote.objects.filter(place__isnull=True).delete()
@@ -168,6 +180,8 @@ class Command(BaseCommand):
             "Дублирующее содержание.",
             "Недостаточно доказательств легенды."
         ]
+        notes_for_sobor = []
+        notes_for_sobor_approved = []
         while note_count < 50:  # Exactly 50 notes
             user = random.choice(regular_users)
             place = random.choice(approved_places)
@@ -176,12 +190,6 @@ class Command(BaseCommand):
                 status = 'approved' if random.random() < 0.5 else 'pending'  # 50/50
                 if random.random() < 0.05:  # 5% rejected
                     status = 'rejected'
-                note_image = self._create_dummy_image(
-                    width=random.randint(200, 500),
-                    height=random.randint(150, 400),
-                    color=(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)),
-                    text=f"Legend {place.id}"
-                ) if random.random() < 0.4 else None
                 note = UserNote.objects.create(
                     user=user,
                     place=place,
@@ -189,8 +197,10 @@ class Command(BaseCommand):
                     moderation_status=status,
                     image=None  # Не кладём картинку напрямую
                 )
-                if note_image:
-                    NoteImage.objects.create(note=note, image=note_image)
+                if place.name == 'Петропавловский собор':
+                    notes_for_sobor.append(note)
+                    if status == 'approved':
+                        notes_for_sobor_approved.append(note)
                 if status == 'rejected':
                     note.rejection_reason = random.choice(rejection_reasons)
                     note.save()
@@ -199,6 +209,18 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f'  Created note for {user.username} about {place.name} (Status: {status})'))
             if len(existing_notes) >= len(regular_users) * len(approved_places):
                 break
+
+        # Добавляем sobor4.jpg к первой approved заметке о Петропавловском соборе
+        if notes_for_sobor_approved:
+            note_img_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../media/note_images'))
+            img_name = 'sobor4.jpg'
+            img_path = os.path.join(note_img_dir, img_name)
+            if os.path.exists(img_path):
+                with open(img_path, 'rb') as f:
+                    NoteImage.objects.create(note=notes_for_sobor_approved[0], image=File(f, name=img_name))
+                    self.stdout.write(self.style.SUCCESS(f'  Added image {img_name} to first APPROVED note about Петропавловский собор'))
+            else:
+                self.stdout.write(self.style.ERROR(f'  Image {img_name} not found for note about Петропавловский собор'))
 
         self.stdout.write(self.style.MIGRATE_HEADING('Creating anecdotal comments for places...'))
         comment_texts = [

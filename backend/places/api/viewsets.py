@@ -7,7 +7,6 @@ from django.db.models.functions import Coalesce
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.contrib.gis.db.models.functions import Distance
-import logging
 
 from places.models import Place, UserNote, Comment, PlaceImage, NoteImage
 from .serializers import PlaceSerializer, UserNoteSerializer, CommentSerializer
@@ -58,13 +57,8 @@ class PlaceViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        logger = logging.getLogger('django')
-        logger.warning(f'FILES: {self.request.FILES}')
-        logger.warning(f'DATA: {self.request.data}')
-        logger.warning(f'USER: {self.request.user}')
         status = 'approved' if self.request.user.is_superuser else 'pending'
         instance = serializer.save(owner=self.request.user, status=status)
-        logger.warning(f'CREATED INSTANCE: {instance}')
 
         # Обработка загрузки нескольких файлов (до 5)
         image_files = self.request.FILES.getlist('image_files')
